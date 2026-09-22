@@ -15,9 +15,9 @@ def test_inactive_zones_block_nothing(scenario, city):
 
 
 def test_circular_zone_blocks_edges_and_nodes(scenario, city):
-    mask = NoFlyMask(city, activate(scenario, "nfz_airport"))
+    mask = NoFlyMask(city, activate(scenario, "nfz_aerodrome"))
     assert mask
-    assert mask.node_blocked_by("C5") == "Airport approach corridor"
+    assert mask.node_blocked_by("L19") == "Kestrel Aerodrome approach"
 
 
 def test_polygon_zone_blocks_its_interior(scenario, city):
@@ -27,7 +27,7 @@ def test_polygon_zone_blocks_its_interior(scenario, city):
 
 
 def test_blocked_edges_are_closed_to_the_router(scenario, city):
-    mask = NoFlyMask(city, activate(scenario, "nfz_airport"))
+    mask = NoFlyMask(city, activate(scenario, "nfz_aerodrome"))
     cm = CostModel(city, SHORTEST_DISTANCE, mask=mask)
     closed = [e for edges in city.adj.values() for e in edges if not cm.is_open(e)]
     assert closed
@@ -39,9 +39,9 @@ def test_zone_imposes_a_cost_penalty_not_a_shortcut(scenario, city):
     from ddros.algorithms.dijkstra import dijkstra_route
     free = CostModel(city, SHORTEST_DISTANCE)
     masked = CostModel(city, SHORTEST_DISTANCE,
-                       mask=NoFlyMask(city, activate(scenario, "nfz_airport")))
-    for target in ("C4", "C8", "C3"):
-        a = dijkstra_route(city, "W", target, free)
-        b = dijkstra_route(city, "W", target, masked)
+                       mask=NoFlyMask(city, activate(scenario, "nfz_aerodrome")))
+    for target in ("L17", "L16", "L19"):
+        a = dijkstra_route(city, city.warehouse, target, free)
+        b = dijkstra_route(city, city.warehouse, target, masked)
         if b is not None:
             assert b.cost >= a.cost - 1e-9

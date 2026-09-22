@@ -115,7 +115,7 @@ def get_scenario():
         "name": scenario.name,
         "nodes": [
             {"id": n.id, "name": n.name, "lat": n.lat, "lon": n.lon,
-             "type": n.type.value}
+             "type": n.type.value, "district": n.district}
             for n in graph.nodes.values()
         ],
         "edges": edges,
@@ -123,9 +123,12 @@ def get_scenario():
             {"id": d.id, "current_node": d.current_node, "battery_pct": d.battery_pct}
             for d in scenario.drones
         ],
-        "deliveries": [
-            {"id": p.id, "destination": p.destination, "priority": p.priority.name}
-            for p in scenario.deliveries
+        "deliveries": _deliveries_payload(),
+        "backdrop": scenario.backdrop,
+        "presets": [
+            {"id": p["id"], "name": p["name"], "summary": p.get("summary", ""),
+             "count": len(p["deliveries"])}
+            for p in scenario.presets
         ],
         "zones": [
             {"id": z.id, "name": z.name, "shape": z.shape, "active": z.active,
@@ -177,6 +180,22 @@ def post_alternatives():
     return jsonify(simulator().alternatives(source, target, _config_from(payload)))
 
 
+def _deliveries_payload() -> list[dict]:
+    """The batch in dispatch order-agnostic submission order, for the order list."""
+    graph = simulator().scenario.graph
+    return [
+        {"id": p.id, "destination": p.destination, "priority": p.priority.name,
+         "destination_name": graph.nodes[p.destination].name,
+         "sequence": p.sequence}
+        for p in simulator().scenario.deliveries
+    ]
+
+
+@api.get("/deliveries")
+def get_deliveries():
+    return jsonify({"deliveries": _deliveries_payload()})
+
+
 @api.post("/deliveries")
 def post_delivery():
     """Add a delivery request to the batch (FR-2.4)."""
@@ -188,14 +207,74 @@ def post_delivery():
     if name not in Priority.__members__:
         raise BadRequest(f"unknown priority '{name}'", "priority")
 
-    identifier = payload.get("id") or f"PKG-{len(scenario.deliveries) + 1:03d}"
-    if any(p.id == identifier for p in scenario.deliveries):
-        raise BadRequest(f"delivery '{identifier}' already exists", "id")
+    existing = {p.id for p in scenario.deliveries}
+    identifier = payload.get("id")
+    if identifier:
+        if identifier in existing:
+            raise BadRequest(f"delivery '{identifier}' already exists", "id")
+    else:
+        # Sequential ids can collide once rows have been removed, so step past
+        # anything already taken rather than trusting the count.
+        n = len(scenario.deliveries) + 1
+        while f"PKG-{n:03d}" in existing:
+            n += 1
+        identifier = f"PKG-{n:03d}"
 
     scenario.deliveries.append(DeliveryRequest(
-        identifier, destination, Priority[name], len(scenario.deliveries)))
+        identifier, destination, Priority[name], _next_sequence(scenario)))
     return jsonify({"id": identifier, "destination": destination,
-                    "priority": name, "count": len(scenario.deliveries)}), 201
+                    "priority": name, "count": len(scenario.deliveries),
+                    "deliveries": _deliveries_payload()}), 201
+
+
+def _next_sequence(scenario) -> int:
+    """One past the highest sequence in use, preserving arrival order (FR-2.5)."""
+    return max((p.sequence for p in scenario.deliveries), default=-1) + 1
+
+
+@api.delete("/deliveries/<delivery_id>")
+def delete_delivery(delivery_id: str):
+    """Remove one order from the batch."""
+    scenario = simulator().scenario
+    before = len(scenario.deliveries)
+    scenario.deliveries[:] = [p for p in scenario.deliveries if p.id != delivery_id]
+    if len(scenario.deliveries) == before:
+        raise BadRequest(f"unknown delivery '{delivery_id}'", "delivery_id")
+    return jsonify({"removed": delivery_id, "count": len(scenario.deliveries),
+                    "deliveries": _deliveries_payload()})
+
+
+@api.post("/deliveries/clear")
+def clear_deliveries():
+    """Empty the batch so an operator can build one by hand."""
+    simulator().scenario.deliveries.clear()
+    return jsonify({"count": 0, "deliveries": []})
+
+
+@api.get("/presets")
+def get_presets():
+    """The prepared demonstration batches (FR-2.7)."""
+    return jsonify({"presets": [
+        {"id": p["id"], "name": p["name"], "summary": p.get("summary", ""),
+         "count": len(p["deliveries"])}
+        for p in simulator().scenario.presets
+    ]})
+
+
+@api.post("/presets/<preset_id>")
+def load_preset(preset_id: str):
+    """Replace the batch with a prepared demonstration plan (FR-2.7)."""
+    scenario = simulator().scenario
+    try:
+        preset = scenario.preset(preset_id)
+    except KeyError as exc:
+        # str() on a KeyError yields the repr of its argument, which mangles the
+        # quoting; take the message itself.
+        raise BadRequest(exc.args[0], "preset_id") from exc
+    scenario.replace_deliveries(preset["deliveries"])
+    return jsonify({"preset": preset_id, "name": preset["name"],
+                    "count": len(scenario.deliveries),
+                    "deliveries": _deliveries_payload()})
 
 
 @api.post("/benchmark")

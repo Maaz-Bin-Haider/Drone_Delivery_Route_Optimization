@@ -1,7 +1,9 @@
 {
   "drones": [
-    {"id": "D1", "current_node": "W", "battery_pct": 90.0},
-    {"id": "D2", "current_node": "W", "battery_pct": 60.0},
-    {"id": "D3", "current_node": "W", "battery_pct": 75.0}
+    {"id": "D1", "current_node": "DEP", "battery_pct": 90.0},
+    {"id": "D2", "current_node": "DEP", "battery_pct": 60.0},
+    {"id": "D3", "current_node": "DEP", "battery_pct": 75.0},
+    {"id": "D4", "current_node": "DEP", "battery_pct": 85.0},
+    {"id": "D5", "current_node": "DEP", "battery_pct": 70.0}
   ]
 }

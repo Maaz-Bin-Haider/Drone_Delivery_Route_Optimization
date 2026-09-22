@@ -27,7 +27,7 @@ def client():
 
 def test_scenario_describes_the_whole_city(client):
     body = client.get("/api/scenario").get_json()
-    assert len(body["nodes"]) >= 20                       # FR-1.8
+    assert len(body["nodes"]) >= 30                       # FR-1.8
     assert body["edges"] and body["drones"] and body["deliveries"]
     assert {n["type"] for n in body["nodes"]} >= {"warehouse", "charging_station", "customer"}
 
@@ -62,7 +62,7 @@ def test_weights_are_normalised_not_rejected(client):
 def test_activating_a_zone_changes_the_plan(client):
     free = client.post("/api/plan", json={}).get_json()
     masked = client.post("/api/plan",
-                         json={"active_no_fly_zones": ["nfz_airport"]}).get_json()
+                         json={"active_no_fly_zones": ["nfz_aerodrome"]}).get_json()
     assert masked["totals"]["unserviceable"] > free["totals"]["unserviceable"]
     assert any("no-fly zone" in u["reason"] for u in masked["unserviceable"])
 
@@ -77,7 +77,7 @@ def test_zero_weights_are_rejected_with_the_field_named(client):
 
 
 def test_unknown_node_is_rejected_with_the_field_named(client):
-    response = client.post("/api/route", json={"source": "W", "target": "ghost"})
+    response = client.post("/api/route", json={"source": "DEP", "target": "ghost"})
     assert response.status_code == 400
     body = response.get_json()
     assert body["field"] == "target" and "ghost" in body["error"]
@@ -108,14 +108,14 @@ def test_reserve_outside_range_is_rejected(client):
 # -- routes ----------------------------------------------------------------
 
 def test_compare_confirms_the_routers_agree(client):
-    body = client.post("/api/compare", json={"source": "W", "target": "C8"}).get_json()
+    body = client.post("/api/compare", json={"source": "DEP", "target": "L16"}).get_json()
     assert body["agree"] is True
     assert body["astar"]["stats"]["nodes_expanded"] <= body["dijkstra"]["stats"]["nodes_expanded"]
 
 
 def test_alternatives_report_both_routes(client):
     body = client.post("/api/route/alternatives",
-                       json={"source": "C3", "target": "C4",
+                       json={"source": "L06", "target": "L21",
                              "wind": {"speed_ms": 16, "bearing_deg": 225}}).get_json()
     assert body["min_distance"] and body["min_energy"]
     assert body["differ"] is True
@@ -123,7 +123,7 @@ def test_alternatives_report_both_routes(client):
 
 
 def test_single_route_honours_the_selected_algorithm(client):
-    body = client.post("/api/route", json={"source": "W", "target": "C8",
+    body = client.post("/api/route", json={"source": "DEP", "target": "L16",
                                            "algorithm": "dijkstra"}).get_json()
     assert body["algorithm"] == "dijkstra"
 
@@ -133,21 +133,21 @@ def test_single_route_honours_the_selected_algorithm(client):
 def test_a_delivery_can_be_added(client):
     before = len(client.get("/api/scenario").get_json()["deliveries"])
     response = client.post("/api/deliveries",
-                           json={"destination": "C6", "priority": "urgent"})
+                           json={"destination": "L06", "priority": "urgent"})
     assert response.status_code == 201
     assert response.get_json()["count"] == before + 1
     assert len(client.get("/api/scenario").get_json()["deliveries"]) == before + 1
 
 
 def test_duplicate_delivery_id_is_rejected(client):
-    client.post("/api/deliveries", json={"id": "PKG-X", "destination": "C6"})
+    client.post("/api/deliveries", json={"id": "PKG-X", "destination": "L06"})
     assert client.post("/api/deliveries",
-                       json={"id": "PKG-X", "destination": "C6"}).status_code == 400
+                       json={"id": "PKG-X", "destination": "L06"}).status_code == 400
 
 
 def test_unknown_priority_is_rejected(client):
     response = client.post("/api/deliveries",
-                           json={"destination": "C6", "priority": "whenever"})
+                           json={"destination": "L06", "priority": "whenever"})
     assert response.status_code == 400
     assert response.get_json()["field"] == "priority"
 
@@ -191,3 +191,88 @@ def test_index_page_loads_the_dashboard(client):
     for asset in ("map.js", "controls.js", "results.js", "charts.js",
                   "animation.js", "app.js", "style.css"):
         assert asset in html
+
+
+# -- demonstration plans and order management ------------------------------
+
+def test_presets_are_listed_with_their_sizes(client):
+    presets = client.get("/api/presets").get_json()["presets"]
+    assert len(presets) >= 3
+    for p in presets:
+        assert p["id"] and p["name"] and p["summary"] and p["count"] > 0
+
+
+def test_loading_a_preset_replaces_the_whole_batch(client):
+    before = client.get("/api/scenario").get_json()["deliveries"]
+    out = client.post("/api/presets/peak_load").get_json()
+    assert out["count"] == 18
+    assert out["count"] != len(before)
+    assert [d["id"] for d in out["deliveries"]] == [f"PKG-{i:03d}" for i in range(1, 19)]
+
+
+def test_a_loaded_preset_dispatches_in_its_own_order(client):
+    """Sequence numbers must be rebuilt, not continued from the previous batch."""
+    client.post("/api/presets/peak_load")
+    client.post("/api/presets/morning_round")
+    sequences = [d["sequence"] for d in client.get("/api/deliveries").get_json()["deliveries"]]
+    assert sequences == list(range(len(sequences)))
+
+
+def test_unknown_preset_is_rejected_with_a_clean_message(client):
+    response = client.post("/api/presets/nonesuch")
+    assert response.status_code == 400
+    body = response.get_json()
+    assert body["field"] == "preset_id"
+    assert body["error"] == "unknown preset 'nonesuch'"
+
+
+def test_an_order_can_be_removed(client):
+    before = client.get("/api/deliveries").get_json()["deliveries"]
+    target = before[2]["id"]
+    out = client.delete(f"/api/deliveries/{target}").get_json()
+    assert out["count"] == len(before) - 1
+    assert target not in [d["id"] for d in out["deliveries"]]
+
+
+def test_removing_an_unknown_order_is_rejected(client):
+    assert client.delete("/api/deliveries/PKG-999").status_code == 400
+
+
+def test_the_batch_can_be_cleared_and_rebuilt_by_hand(client):
+    assert client.post("/api/deliveries/clear").get_json()["count"] == 0
+    plan = client.post("/api/plan", json={}).get_json()
+    assert plan["totals"]["delivered"] == 0          # an empty batch is valid
+
+    client.post("/api/deliveries", json={"destination": "L16", "priority": "URGENT"})
+    client.post("/api/deliveries", json={"destination": "L01", "priority": "NORMAL"})
+    plan = client.post("/api/plan", json={}).get_json()
+    assert plan["totals"]["delivered"] == 2
+    assert plan["assignments"][0]["priority"] == "URGENT"
+
+
+def test_ids_do_not_collide_after_a_removal(client):
+    """Sequential numbering must skip ids already in use."""
+    client.post("/api/deliveries/clear")
+    for dest in ("L01", "L02", "L03"):
+        client.post("/api/deliveries", json={"destination": dest})
+    client.delete("/api/deliveries/PKG-002")
+    out = client.post("/api/deliveries", json={"destination": "L04"}).get_json()
+    ids = [d["id"] for d in out["deliveries"]]
+    assert len(ids) == len(set(ids)), f"duplicate id generated: {ids}"
+
+
+def test_scenario_carries_the_fictional_backdrop(client):
+    body = client.get("/api/scenario").get_json()
+    assert body["name"] == "Kestrel Bay"
+    backdrop = body["backdrop"]
+    assert backdrop["water"] and backdrop["parks"] and backdrop["districts"]
+    assert backdrop["river"]["points"]
+
+
+def test_every_location_names_its_district(client):
+    nodes = client.get("/api/scenario").get_json()["nodes"]
+    assert all(n["district"] for n in nodes)
+
+
+def test_the_fleet_has_five_drones(client):
+    assert len(client.get("/api/scenario").get_json()["drones"]) == 5

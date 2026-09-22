@@ -93,9 +93,44 @@
        &rarr; ${esc(p.destination)}</li>`).join('');
   }
 
+  function renderOrders(deliveries, onRemove) {
+    const list = document.getElementById('order-list');
+    const count = document.getElementById('order-count');
+    count.textContent = deliveries.length ? `(${deliveries.length})` : '';
+    if (!deliveries.length) {
+      list.innerHTML = '<div class="order-empty">No orders. ' +
+                       'Add one above or load a plan.</div>';
+      return;
+    }
+    list.innerHTML = deliveries.map(d => `
+      <div class="order-row">
+        <span class="pill ${esc(d.priority)}">${esc(d.priority[0])}</span>
+        <span>${esc(d.destination_name || d.destination)}</span>
+        <span class="mono" style="color:var(--muted)">${esc(d.id)}</span>
+        <button class="rm" data-id="${esc(d.id)}" title="Remove">&times;</button>
+      </div>`).join('');
+    list.querySelectorAll('.rm').forEach(b =>
+      b.addEventListener('click', () => onRemove(b.dataset.id)));
+  }
+
+  function renderPresets(presets, onLoad) {
+    document.getElementById('preset-list').innerHTML = presets.map(p => `
+      <div class="preset-card" data-id="${esc(p.id)}">
+        <div class="t">${esc(p.name)}<span>${p.count} orders</span></div>
+        <div class="s">${esc(p.summary)}</div>
+      </div>`).join('');
+    document.querySelectorAll('.preset-card').forEach(card =>
+      card.addEventListener('click', () => {
+        document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('on'));
+        card.classList.add('on');
+        onLoad(card.dataset.id);
+      }));
+  }
+
   function renderPair(html) {
     document.getElementById('pair-result').innerHTML = html;
   }
 
-  D.results = { renderTotals, renderTable, renderFleet, renderQueue, renderPair, esc };
+  D.results = { renderTotals, renderTable, renderFleet, renderQueue,
+                renderOrders, renderPresets, renderPair, esc };
 })();

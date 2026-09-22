@@ -38,13 +38,13 @@ def test_unreachable_target_returns_none_not_an_exception(brief_graph):
 
 def test_every_node_is_expanded_at_most_once(city):
     cm = CostModel(city, SHORTEST_DISTANCE)
-    out = dijkstra(city, "W", cm)
+    out = dijkstra(city, city.warehouse, cm)
     assert out.stats.nodes_expanded <= len(city.nodes)
 
 
 def test_path_totals_match_the_edges_walked(city):
     cm = CostModel(city, SHORTEST_DISTANCE)
-    route = dijkstra_route(city, "W", "C8", cm)
+    route = dijkstra_route(city, city.warehouse, "L16", cm)
     by_pair = {(e.u, e.v): e for edges in city.adj.values() for e in edges}
     walked = sum(by_pair[(a, b)].distance_km
                  for a, b in zip(route.path, route.path[1:]))

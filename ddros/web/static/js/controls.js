@@ -69,6 +69,22 @@
     if (far) el('pair-to').value = far.id;
   }
 
+  function populateDestinations(nodes) {
+    // Customers are the realistic destinations, so they lead; the rest stay
+    // available for anyone who wants to route to a pad or a junction.
+    const group = (label, list) => list.length
+      ? `<optgroup label="${label}">` + list.map(n =>
+          `<option value="${D.results.esc(n.id)}">${D.results.esc(n.name)}` +
+          (n.district ? ` \u2014 ${D.results.esc(n.district)}` : '') +
+          `</option>`).join('') + '</optgroup>'
+      : '';
+    const by = t => nodes.filter(n => n.type === t);
+    el('order-dest').innerHTML =
+      group('Customers', by('customer')) +
+      group('Charging pads', by('charging_station')) +
+      group('Junctions', by('waypoint'));
+  }
+
   function debounce(fn, ms) {
     let timer = null;
     return function () {
@@ -98,5 +114,6 @@
     syncReadouts();
   }
 
-  D.controls = { config, wire, populateZones, populatePairs, syncReadouts, weights };
+  D.controls = { config, wire, populateZones, populatePairs,
+                 populateDestinations, syncReadouts, weights };
 })();

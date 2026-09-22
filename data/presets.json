@@ -1,0 +1,65 @@
+{
+  "presets": [
+    {
+      "id": "morning_round",
+      "name": "Morning Round",
+      "summary": "Ten routine parcels spread across every district. The baseline run: all five drones share the work and nothing needs recharging.",
+      "deliveries": [
+        {"destination": "L06", "priority": "NORMAL"},
+        {"destination": "L08", "priority": "URGENT"},
+        {"destination": "L19", "priority": "NORMAL"},
+        {"destination": "L05", "priority": "HIGH"},
+        {"destination": "L17", "priority": "NORMAL"},
+        {"destination": "L16", "priority": "HIGH"},
+        {"destination": "L11", "priority": "URGENT"},
+        {"destination": "L01", "priority": "NORMAL"},
+        {"destination": "L13", "priority": "NORMAL"},
+        {"destination": "L22", "priority": "HIGH"}
+      ]
+    },
+    {
+      "id": "medical_emergency",
+      "name": "Medical Emergency",
+      "summary": "Four urgent medical consignments to the infirmary and the clinic, queued behind six routine parcels. Shows the priority queue overtaking work that arrived first.",
+      "deliveries": [
+        {"destination": "L15", "priority": "NORMAL"},
+        {"destination": "L20", "priority": "NORMAL"},
+        {"destination": "L10", "priority": "NORMAL"},
+        {"destination": "L02", "priority": "NORMAL"},
+        {"destination": "L08", "priority": "URGENT"},
+        {"destination": "L05", "priority": "URGENT"},
+        {"destination": "L08", "priority": "URGENT"},
+        {"destination": "L13", "priority": "URGENT"},
+        {"destination": "L18", "priority": "NORMAL"},
+        {"destination": "L04", "priority": "NORMAL"},
+        {"destination": "L21", "priority": "HIGH"},
+        {"destination": "L12", "priority": "HIGH"}
+      ]
+    },
+    {
+      "id": "peak_load",
+      "name": "Peak Load",
+      "summary": "Eighteen parcels, many to the far corners of the map. The fleet runs its batteries down and drones start routing through charging pads.",
+      "deliveries": [
+        {"destination": "L16", "priority": "HIGH"},
+        {"destination": "L17", "priority": "NORMAL"},
+        {"destination": "L18", "priority": "NORMAL"},
+        {"destination": "L20", "priority": "HIGH"},
+        {"destination": "L22", "priority": "NORMAL"},
+        {"destination": "L15", "priority": "NORMAL"},
+        {"destination": "L14", "priority": "NORMAL"},
+        {"destination": "L11", "priority": "URGENT"},
+        {"destination": "L03", "priority": "NORMAL"},
+        {"destination": "L04", "priority": "HIGH"},
+        {"destination": "L05", "priority": "URGENT"},
+        {"destination": "L01", "priority": "NORMAL"},
+        {"destination": "L21", "priority": "NORMAL"},
+        {"destination": "L10", "priority": "HIGH"},
+        {"destination": "L09", "priority": "NORMAL"},
+        {"destination": "L19", "priority": "NORMAL"},
+        {"destination": "L12", "priority": "NORMAL"},
+        {"destination": "L13", "priority": "HIGH"}
+      ]
+    }
+  ]
+}

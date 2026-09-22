@@ -52,7 +52,7 @@ def test_energy_multiplier_stays_clamped(city):
 
 def test_calm_air_leaves_base_values_untouched(city):
     cm = CostModel(city, SHORTEST_DISTANCE)
-    e = next(iter(city.adj["W"]))
+    e = next(iter(city.adj[city.warehouse]))
     assert cm.edge_energy(e) == pytest.approx(e.base_energy_pct)
 
 

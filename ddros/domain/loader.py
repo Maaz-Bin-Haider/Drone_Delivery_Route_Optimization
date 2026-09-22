@@ -7,7 +7,7 @@ an actionable diagnostic rather than a stack trace.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..graph.graph import Graph
@@ -24,6 +24,37 @@ class Scenario:
     drones: list[Drone]
     deliveries: list[DeliveryRequest]
     zones: list[NoFlyZone]
+    backdrop: dict = field(default_factory=dict)
+    presets: list[dict] = field(default_factory=list)
+
+    def replace_deliveries(self, specs: list[dict]) -> list[DeliveryRequest]:
+        """Swap the batch for a new one, renumbering ids and sequence.
+
+        The sequence number is the priority queue's tie-breaker, so it must be
+        rebuilt from scratch rather than continued: a loaded batch should
+        dispatch in the order it was written, not in the order of whatever it
+        replaced.
+        """
+        batch = []
+        for i, spec in enumerate(specs):
+            destination = spec["destination"]
+            if destination not in self.graph.nodes:
+                raise ScenarioValidationError(
+                    f"delivery #{i + 1} targets unknown destination '{destination}'")
+            name = str(spec.get("priority", "NORMAL")).upper()
+            if name not in Priority.__members__:
+                raise ScenarioValidationError(
+                    f"delivery #{i + 1} has unknown priority '{name}'")
+            batch.append(DeliveryRequest(
+                spec.get("id") or f"PKG-{i + 1:03d}", destination, Priority[name], i))
+        self.deliveries[:] = batch
+        return batch
+
+    def preset(self, preset_id: str) -> dict:
+        for p in self.presets:
+            if p["id"] == preset_id:
+                return p
+        raise KeyError(f"unknown preset '{preset_id}'")
 
     def zone(self, zone_id: str) -> NoFlyZone:
         for z in self.zones:
@@ -48,7 +79,8 @@ def load_graph(path: Path) -> tuple[str, Graph]:
     for i, n in enumerate(raw.get("nodes", [])):
         try:
             nodes.append(Node(n["id"], n["name"], float(n["lat"]),
-                              float(n["lon"]), NodeType(n["type"])))
+                              float(n["lon"]), NodeType(n["type"]),
+                              n.get("district", "")))
         except (KeyError, ValueError) as exc:
             raise ValueError(f"{path.name}: node #{i} is malformed: {exc}") from exc
     graph = Graph.build(nodes, raw.get("edges", []))
@@ -99,6 +131,13 @@ def load_zones(path: Path) -> list[NoFlyZone]:
     return out
 
 
+def load_json_if_present(path: Path, key: str, default):
+    """Optional scenario files degrade to a default rather than failing."""
+    if not path.exists():
+        return default
+    return _read(path).get(key, default)
+
+
 def load_scenario(data_dir: str | Path = "data") -> Scenario:
     d = Path(data_dir)
     name, graph = load_graph(d / "city_map.json")
@@ -106,4 +145,7 @@ def load_scenario(data_dir: str | Path = "data") -> Scenario:
     deliveries = load_deliveries(d / "deliveries.json")
     zones = load_zones(d / "no_fly_zones.json")
     validate_scenario(graph, drones, deliveries)
-    return Scenario(name, graph, drones, deliveries, zones)
+
+    backdrop = _read(d / "city_backdrop.json") if (d / "city_backdrop.json").exists() else {}
+    presets = load_json_if_present(d / "presets.json", "presets", [])
+    return Scenario(name, graph, drones, deliveries, zones, backdrop, presets)

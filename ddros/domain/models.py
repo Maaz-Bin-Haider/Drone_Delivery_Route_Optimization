@@ -37,6 +37,7 @@ class Node:
     lat: float
     lon: float
     type: NodeType
+    district: str = ""      # presentation only; no algorithm reads it
 
 
 @dataclass(frozen=True)

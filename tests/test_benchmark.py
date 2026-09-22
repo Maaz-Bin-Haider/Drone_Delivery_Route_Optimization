@@ -101,7 +101,7 @@ def _brute_force_makespan(table, warehouse, destinations, drone_count):
 @pytest.mark.parametrize("packages,drones", [(3, 2), (4, 2), (4, 3)])
 def test_held_karp_matches_exhaustive_enumeration(city, packages, drones):
     table = RouteTable(city, CostModel(city, SHORTEST_DISTANCE))
-    destinations = ["C1", "C3", "C5", "C7"][:packages]
+    destinations = ["L01", "L06", "L09", "L13"][:packages]
     fast = bench._optimal_makespan(table, city.warehouse, destinations, drones)
     slow = _brute_force_makespan(table, city.warehouse, destinations, drones)
     assert fast == pytest.approx(slow)

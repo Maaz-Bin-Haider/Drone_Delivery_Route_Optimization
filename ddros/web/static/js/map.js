@@ -37,18 +37,14 @@
       map.setZoom(map.getZoom() + (ev.deltaY < 0 ? 1 : -1));
     }, { passive: false });
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19, opacity: 0.55,
-      attribution: '&copy; OpenStreetMap contributors'
-    }).on('tileerror', function () {
-      // Graceful degradation: the graph stays legible without a base map (C-4).
-      if (tileWarned) return;
-      tileWarned = true;
-      const el = document.getElementById('tile-notice');
-      if (el) el.hidden = false;
-    }).addTo(map);
-
+    // Kestrel Bay is fictional, so there is no real base map to tile. The
+    // geography is drawn from data/city_backdrop.json instead, which also
+    // leaves the application with no network dependency at run time (C-4).
     layers = {
+      water:  L.layerGroup().addTo(map),
+      parks:  L.layerGroup().addTo(map),
+      river:  L.layerGroup().addTo(map),
+      labels: L.layerGroup().addTo(map),
       edges:  L.layerGroup().addTo(map),
       zones:  L.layerGroup().addTo(map),
       routes: L.layerGroup().addTo(map),
@@ -66,7 +62,8 @@
   function nodeMarker(node) {
     const style = NODE_STYLE[node.type] || NODE_STYLE.waypoint;
     const label = `<strong>${node.name}</strong><br><span class="mono">${node.id}</span>
-                   &middot; ${node.type.replace('_', ' ')}`;
+                   &middot; ${node.type.replace('_', ' ')}` +
+                  (node.district ? `<br><span style="color:#5b6b7c">${node.district}</span>` : '');
     if (style.kind === 'icon') {
       return L.marker([node.lat, node.lon], {
         icon: L.divIcon({
@@ -81,6 +78,40 @@
       radius: style.radius, color: style.color, fillColor: style.fill,
       fillOpacity: 1, weight: style.weight
     }).bindTooltip(label);
+  }
+
+  function drawBackdrop(backdrop) {
+    ['water', 'parks', 'river', 'labels'].forEach(k => layers[k].clearLayers());
+    if (!backdrop) return;
+
+    (backdrop.water || []).forEach(w => {
+      L.polygon(w.points, { color: '#8fb8d4', weight: 1, fillColor: '#bcd9ea',
+                            fillOpacity: 1, interactive: false })
+        .addTo(layers.water);
+      const centre = L.polygon(w.points).getBounds().getCenter();
+      L.marker(centre, { interactive: false, icon: L.divIcon({
+        className: 'geo-label water-label', html: w.name, iconSize: [120, 16]
+      })}).addTo(layers.labels);
+    });
+
+    (backdrop.parks || []).forEach(g => {
+      L.polygon(g.points, { color: '#9dc79d', weight: 1, fillColor: '#cfe6c9',
+                            fillOpacity: 1, interactive: false })
+        .addTo(layers.parks);
+    });
+
+    if (backdrop.river) {
+      L.polyline(backdrop.river.points, {
+        color: '#bcd9ea', weight: 9, opacity: 1, lineJoin: 'round',
+        lineCap: 'round', interactive: false
+      }).addTo(layers.river);
+    }
+
+    (backdrop.districts || []).forEach(d => {
+      L.marker(d.at, { interactive: false, icon: L.divIcon({
+        className: 'geo-label district-label', html: d.name, iconSize: [130, 16]
+      })}).addTo(layers.labels);
+    });
   }
 
   function drawScenario(scenario) {
@@ -190,6 +221,30 @@
        <div class="row"><span class="dot" style="background:#fff;border:2px solid #16202b;border-radius:50%"></span>customer</div>`;
   }
 
+  function droneSvg(color, heading, flying) {
+    // Top-view quadcopter. Drawn nose-up, then rotated to the flight heading,
+    // so a viewer can read direction of travel from the aircraft itself.
+    const rotor = (cx, cy) => `
+      <g class="rotor" style="transform-origin:${cx}px ${cy}px">
+        <circle cx="${cx}" cy="${cy}" r="8.2" fill="${color}" fill-opacity="0.16"/>
+        <circle cx="${cx}" cy="${cy}" r="8.2" fill="none" stroke="${color}"
+                stroke-width="1.1" stroke-opacity="0.55"/>
+        <path d="M${cx - 7.4} ${cy} H${cx + 7.4}" stroke="${color}"
+              stroke-width="2.1" stroke-linecap="round"/>
+      </g>`;
+    return `<svg viewBox="0 0 48 48" width="42" height="42"
+                 class="drone-svg${flying ? ' flying' : ''}"
+                 style="transform:rotate(${heading}deg)">
+      <g stroke="${color}" stroke-width="3" stroke-linecap="round">
+        <path d="M14 14 L34 34"/><path d="M34 14 L14 34"/>
+      </g>
+      ${rotor(14, 14)}${rotor(34, 14)}${rotor(14, 34)}${rotor(34, 34)}
+      <rect x="18" y="17" width="12" height="15" rx="4.5"
+            fill="${color}" stroke="#ffffff" stroke-width="1.6"/>
+      <path d="M24 15.5 L27 19 H21 Z" fill="#ffffff"/>
+    </svg>`;
+  }
+
   function setDronePositions(positions) {
     layers.drones.clearLayers();
     Object.keys(positions).forEach(function (id) {
@@ -197,9 +252,10 @@
       if (!p) return;
       L.marker(p.at, {
         icon: L.divIcon({
-          className: 'drone-icon',
-          html: `<span style="background:${colorFor(id)}"></span><b>${id}</b>`,
-          iconSize: [40, 16], iconAnchor: [20, 8]
+          className: 'drone-marker',
+          html: droneSvg(colorFor(id), p.heading || 0, !!p.flying) +
+                `<b style="border-color:${colorFor(id)}">${id}</b>`,
+          iconSize: [42, 56], iconAnchor: [21, 21]
         }),
         interactive: false, zIndexOffset: 1000
       }).addTo(layers.drones);
@@ -208,7 +264,7 @@
 
   function clearDrones() { layers.drones.clearLayers(); }
 
-  D.map = { init, drawScenario, drawZones, drawPlan, latlng,
+  D.map = { init, drawScenario, drawBackdrop, drawZones, drawPlan, latlng,
             colorFor, setDronePositions, clearDrones,
             nodes: () => nodesById };
 })();

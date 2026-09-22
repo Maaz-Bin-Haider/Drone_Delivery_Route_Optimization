@@ -56,6 +56,59 @@
     }
   }
 
+  function syncOrders(deliveries) {
+    scenario.deliveries = deliveries;
+    D.results.renderOrders(deliveries, removeOrder);
+    D.results.renderQueue(deliveries);
+  }
+
+  async function loadPreset(presetId) {
+    status('loading plan\u2026', 'busy');
+    try {
+      const out = await call('/api/presets/' + encodeURIComponent(presetId),
+                             { method: 'POST' });
+      syncOrders(out.deliveries);
+      await plan();
+    } catch (err) { status('error', 'error'); toast(err.message); }
+  }
+
+  async function addOrder() {
+    const destination = document.getElementById('order-dest').value;
+    const priority = document.getElementById('order-priority').value;
+    try {
+      const out = await call('/api/deliveries', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ destination, priority })
+      });
+      syncOrders(out.deliveries);
+      clearPresetSelection();
+      await plan();
+    } catch (err) { toast(err.message); }
+  }
+
+  async function removeOrder(id) {
+    try {
+      const out = await call('/api/deliveries/' + encodeURIComponent(id),
+                             { method: 'DELETE' });
+      syncOrders(out.deliveries);
+      clearPresetSelection();
+      await plan();
+    } catch (err) { toast(err.message); }
+  }
+
+  async function clearOrders() {
+    try {
+      const out = await call('/api/deliveries/clear', { method: 'POST' });
+      syncOrders(out.deliveries);
+      clearPresetSelection();
+      await plan();
+    } catch (err) { toast(err.message); }
+  }
+
+  function clearPresetSelection() {
+    document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('on'));
+  }
+
   async function comparePair() {
     const payload = Object.assign(D.controls.config(), {
       source: document.getElementById('pair-from').value,
@@ -131,10 +184,14 @@
       toast('Could not load the scenario: ' + err.message);
       return;
     }
+    D.map.drawBackdrop(scenario.backdrop);
     D.map.drawScenario(scenario);
     D.results.renderQueue(scenario.deliveries);
+    D.results.renderOrders(scenario.deliveries, removeOrder);
+    D.results.renderPresets(scenario.presets, loadPreset);
     D.controls.populateZones(scenario.zones, plan);
     D.controls.populatePairs(scenario.nodes);
+    D.controls.populateDestinations(scenario.nodes);
     D.controls.wire(plan);
 
     document.getElementById('btn-plan').addEventListener('click', plan);
@@ -147,6 +204,8 @@
     document.getElementById('btn-reset').addEventListener('click', D.animation.reset);
     document.getElementById('clock').addEventListener('input',
       e => D.animation.seek(e.target.value));
+    document.getElementById('btn-add-order').addEventListener('click', addOrder);
+    document.getElementById('btn-clear-orders').addEventListener('click', clearOrders);
     document.getElementById('btn-compare').addEventListener('click', comparePair);
     document.getElementById('btn-alts').addEventListener('click', alternatives);
     document.querySelectorAll('.analysis button[data-exp]').forEach(btn =>

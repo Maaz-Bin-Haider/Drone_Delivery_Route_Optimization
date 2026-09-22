@@ -1,24 +1,32 @@
 {
   "no_fly_zones": [
     {
-      "id": "nfz_airport",
-      "name": "Airport approach corridor",
+      "id": "nfz_aerodrome",
+      "name": "Kestrel Aerodrome approach",
       "shape": "circle",
       "active": false,
-      "centre": [24.8700, 67.0260],
-      "radius_km": 1.8
+      "centre": [20.0500, 55.0901],
+      "radius_km": 1.9
     },
     {
       "id": "nfz_stadium",
-      "name": "Stadium event airspace",
+      "name": "Highgate Stadium airspace",
       "shape": "polygon",
       "active": false,
       "vertices": [
-        [24.8850, 67.0040],
-        [24.8850, 67.0260],
-        [24.8980, 67.0260],
-        [24.8980, 67.0040]
+        [20.0800, 55.0848],
+        [20.0800, 55.1060],
+        [20.0960, 55.1060],
+        [20.0960, 55.0848]
       ]
+    },
+    {
+      "id": "nfz_foundry",
+      "name": "Foundry chimney exclusion",
+      "shape": "circle",
+      "active": false,
+      "centre": [20.0100, 55.0583],
+      "radius_km": 1.3
     }
   ]
 }

@@ -19,7 +19,7 @@ WINDS = [Wind(0, 0), Wind(9, 90), Wind(16, 225)]
 def test_heuristic_is_admissible(city, weights, wind):
     """h(n) must never exceed the true remaining cost (TDD 7.3.2)."""
     cm = CostModel(city, weights, wind)
-    target = "C8"
+    target = "L16"
     truth = dijkstra(city.reversed(), target, cm)   # true cost from every node
     h = haversine_heuristic(city, target, cm)
     for node in city.nodes:
@@ -32,7 +32,7 @@ def test_heuristic_is_admissible(city, weights, wind):
 def test_heuristic_is_consistent(city, weights, wind):
     """h(u) <= c(u,v) + h(v) for every edge (TDD 7.3.3)."""
     cm = CostModel(city, weights, wind)
-    h = haversine_heuristic(city, "C8", cm)
+    h = haversine_heuristic(city, "L16", cm)
     for edges in city.adj.values():
         for e in edges:
             assert h(e.u) <= cm.edge_cost(e) + h(e.v) + 1e-9

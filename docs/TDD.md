@@ -3,7 +3,7 @@
 ## Drone Delivery Route Optimization System
 
 **Course:** Design & Analysis of Algorithms (DAA)
-**Document version:** 1.0
+**Document version:** 1.1
 **Date:** 22 September 2026
 **Companion document:** [Software Requirements Specification](SRS.md)
 
@@ -865,6 +865,26 @@ deliveries clustered in one district may load a single drone even where a later 
 would reduce the makespan. Greedy does not backtrack. This is documented rather than hidden,
 and §21 notes the local-search improvement that would address it.
 
+**Observed: Graham's timing anomaly reproduces here.** List scheduling is not monotone in
+the number of machines — adding one can make the makespan *worse*, because it changes every
+subsequent assignment decision. Graham (1969) named this for identical machines; on the
+demonstration scenario it appears directly:
+
+| Drones | Makespan | Charging detours |
+|---|---|---|
+| 1 | 132.3 min | 2 |
+| 2 | **64.0 min** | 2 |
+| 3 | **78.9 min** &nbsp;← worse than two | 1 |
+| 4 | 20.3 min | 0 |
+| 5 | 16.7 min | 0 |
+
+A control run isolates the cause. Giving every drone a full charge makes the sweep monotone
+again (129.8, 36.6, 32.7, 20.3, 16.7), so the anomaly here is not caused by the routing but
+by **battery heterogeneity interacting with the scheduler**: a drone with less charge can be
+the earliest finisher for one delivery and then be slow for everything after it. Both the
+anomaly and its control are asserted by tests, because a suite demanding monotonicity would
+be asserting something false about greedy scheduling.
+
 ---
 
 ## 10. Environment Model
@@ -950,7 +970,12 @@ All payloads are `application/json`; the server binds to `127.0.0.1:5000` by def
 | `POST` | `/api/route` | Single point-to-point route | FR-3 |
 | `POST` | `/api/compare` | Dijkstra vs A* on one pair, with statistics | FR-3.4, FR-11.2 |
 | `POST` | `/api/route/alternatives` | Minimum-distance and minimum-energy routes side by side | FR-4.7 |
-| `POST` | `/api/deliveries` | Add a delivery request | FR-2.4 |
+| `GET` | `/api/deliveries` | The current batch | FR-2.4 |
+| `POST` | `/api/deliveries` | Add a delivery request | FR-2.4, FR-2.7 |
+| `DELETE` | `/api/deliveries/<id>` | Remove one order | FR-2.7 |
+| `POST` | `/api/deliveries/clear` | Empty the batch | FR-2.7 |
+| `GET` | `/api/presets` | List the prepared demonstration plans | FR-2.8 |
+| `POST` | `/api/presets/<id>` | Load a plan, replacing the batch | FR-2.8, FR-2.9 |
 | `POST` | `/api/benchmark` | Run the benchmark sweep | FR-11.3 |
 | `GET` | `/api/export?format=json\|csv` | Export the current plan | FR-10.6, SI-3 |
 
@@ -1060,7 +1085,7 @@ flag — this is principle **P6** expressed in the API contract.
 | `controls.js` | Slider and toggle state, debounced replan requests, weight renormalisation to sum 1 |
 | `results.js` | Plan table, per-drone panel, batch totals, unserviceable list |
 | `charts.js` | Chart.js benchmark plots |
-| `animation.js` | `requestAnimationFrame` interpolation of drone markers along route polylines, with play/pause/reset |
+| `animation.js` | `requestAnimationFrame` interpolation of drone markers along route polylines, with play/pause/reset/scrub. Each drone is drawn as a quadcopter rotated to the bearing of the segment it is flying, with its rotors animated only while airborne, so direction of travel and flight state are both readable from the sprite (UI-5a). |
 
 ### 13.3 Interaction Notes
 
@@ -1071,8 +1096,13 @@ flag — this is principle **P6** expressed in the API contract.
 - Route colours are drawn from a palette chosen to remain distinguishable under
   deuteranopia and protanopia, and each route additionally carries a distinct dash pattern so
   that colour is never the sole channel *(NFR-21)*.
-- The map degrades gracefully without internet access: if tile requests fail, a plain
-  background is rendered and the graph remains fully legible *(C-4)*.
+- Kestrel Bay is fictional, so there is no base map to tile. Its geography is drawn from
+  `data/city_backdrop.json` — bay, river, parks and district labels — which makes the
+  depiction unambiguously invented and leaves the application with **no network dependency
+  at run time** *(C-4, FR-1.10, FR-1.11)*.
+- A wheel gesture over the map scrolls the page rather than zooming Leaflet. With the default
+  behaviour the reader cannot scroll past the map to the results at all; zoom stays available
+  on the control, by double-click and by Ctrl+wheel *(UI-15)*.
 
 ---
 
@@ -1087,9 +1117,11 @@ Drone_Delivery/
 │   ├── SRS.md
 │   └── TDD.md
 ├── data/
-│   ├── city_map.json             # >= 20 nodes  (FR-1.8)
-│   ├── fleet.json
+│   ├── city_map.json             # Kestrel Bay: 34 nodes, 92 corridors (FR-1.8)
+│   ├── city_backdrop.json        # drawn geography: water, river, parks (FR-1.11)
+│   ├── fleet.json                # five drones
 │   ├── deliveries.json
+│   ├── presets.json              # prepared demonstration plans (FR-2.8)
 │   └── no_fly_zones.json
 ├── ddros/
 │   ├── __init__.py
@@ -1207,7 +1239,7 @@ Satisfies FR-11 and supplies the "Analysis" half of the coursework.
 | **Hypothesis** | *Per journey*, shifting weight from distance to energy reduces energy consumed at a modest cost in distance — the brief's Route A / Route B claim, quantified. **At batch level the effect is not monotonic**, for the reason given below. |
 | **Method** | Two measurements, deliberately separated. (a) Per journey: for a fixed origin and destination, record distance and energy at `β ∈ {0.0, 0.2, …, 1.0}`. (b) Per batch: plan the whole batch at the same settings and record total distance, total energy, makespan and the number of charging detours triggered. |
 | **Output** | Dual-axis chart of distance and energy vs β for (a), identifying the knee of the trade-off. For (b), a chart overlaying total batch energy with the charging-detour count. |
-| **Observed** | (a) behaves as the brief predicts. (b) does **not**: on the demonstration scenario under a 16 m/s wind, moving from pure-distance to pure-energy routing *raised* total batch energy from 166 % to 249 %. Energy-optimal routes are slower, which delays drones, which pushed one delivery past its feasible range and forced a charging detour — an extra leg costing more energy than the per-route savings recovered. |
+| **Observed** | (a) behaves as the brief predicts at every setting. (b) does **not**. On the Peak Load batch under an 18 m/s north-easterly, raising β from 0.0 to 0.1 added a third charging detour and pushed total batch energy *up* from 408 % to 433 %; beyond β = 0.5 the third detour disappears again and energy settles at 414 %. Energy-optimal routes are slower, which delays drones, which pushes a delivery past its feasible range and forces a detour whose extra leg costs more than the per-route saving recovers. **The effect requires the fleet to be near its feasibility boundary**: on a batch the drones absorb comfortably no detour is triggered and batch energy falls monotonically, exactly as the per-journey result predicts. The `charging_detours` column is what distinguishes the two regimes, which is why the experiment reports it alongside the energy total. |
 | **Why it matters** | This is the most instructive result in the project. It shows that locally optimising each route does not optimise the schedule that contains them, because routing and scheduling are coupled through battery state and time. The correct conclusion is not that energy-aware routing fails, but that the objective must be set at the level the operator actually cares about. A mid-range β captures most of the per-route saving without triggering the detour. |
 
 ### Experiment 4 — Value of the fleet
@@ -1217,7 +1249,8 @@ Satisfies FR-11 and supplies the "Analysis" half of the coursework.
 | **Hypothesis** | Makespan falls substantially but sub-linearly as drones are added. |
 | **Method** | Plan the same batch with `D ∈ {1, 2, 3, 4, 5}`. Record makespan and per-drone utilisation. |
 | **Output** | Makespan vs D, with the ideal `1/D` curve overlaid to show the gap, plus per-row charging-detour and flight-time columns. Directly quantifies benefit §4.4 of the brief *(FR-11.7)*. |
-| **Observed** | The hypothesis was **wrong in an instructive way**: speedup is *super*-linear — 5.90× from three drones, against an ideal of 3×. This is not parallelism beating its own bound. Two further costs disappear as the fleet grows. One drone cannot carry the batch on a single charge and pays 53.5 minutes across three recharge cycles, which vanish entirely from three drones onward; and a single drone must chain all ten destinations into one sequential tour, spending 124.2 minutes airborne against 49.3 for three drones. The benchmark therefore reports detours and flight time per row, so the parallel speedup is separable from the recharge and tour-length savings rather than conflated with them. |
+| **Observed (anomaly)** | Makespan is **not monotone** in fleet size: on the supplied fleet, three drones are slower than two (78.9 min against 64.0 min). This is Graham's timing anomaly, and §9.4 gives the measurement and the control that identifies battery heterogeneity as its cause. |
+| **Observed (superlinearity)** | The hypothesis was **wrong in an instructive way**: speedup is *super*-linear — 5.90× from three drones, against an ideal of 3×. This is not parallelism beating its own bound. Two further costs disappear as the fleet grows. One drone cannot carry the batch on a single charge and pays 53.5 minutes across three recharge cycles, which vanish entirely from three drones onward; and a single drone must chain all ten destinations into one sequential tour, spending 124.2 minutes airborne against 49.3 for three drones. The benchmark therefore reports detours and flight time per row, so the parallel speedup is separable from the recharge and tour-length savings rather than conflated with them. |
 
 ### Experiment 5 — Greedy assignment quality
 
@@ -1302,6 +1335,7 @@ threshold, since its logic is thin by design.
 | R6 | Floating-point tie-breaking makes results non-deterministic | Medium | Medium | All comparisons use an explicit epsilon; every tie-break falls through to a unique integer or string key *(P5)*. |
 | R7 | Scope creep into unselected extensions | Medium | Medium | §1.2 of the SRS enumerates exclusions explicitly. Dynamic requests and payload capacity are out of scope and are recorded in §21 as future work. |
 | R8 | Demonstration map fails to exhibit the intended phenomena | Medium | Medium | Map properties — a wind-sensitive pair, an energy-vs-distance pair, a zone-blockable route — are asserted by automated tests, not assumed. |
+| R10 | Adding a drone can lengthen the schedule (Graham's anomaly, observed in §9.4) | Confirmed | Medium | Documented and asserted by tests, with a control run identifying battery heterogeneity as the cause. The local-search pass in §21 would remove it; until then the analysis panel reports makespan per fleet size so the anomaly is visible rather than surprising. |
 | R9 | Pure energy-weighted routing increases *total* batch energy by triggering charging detours (observed, see Experiment 3) | Confirmed | Medium | Documented as a finding rather than suppressed. The dashboard defaults to a balanced weighting; the analysis panel reports the charging-detour count alongside total energy so the coupling is visible rather than surprising. |
 
 ---

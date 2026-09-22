@@ -4,6 +4,7 @@ import pytest
 
 from ddros.constants import RESERVE_PCT
 from ddros.cost.cost_model import SHORTEST_DISTANCE, CostModel
+from ddros.domain.models import Drone
 from ddros.scheduling.assignment import assign_fleet
 from ddros.simulation.cache import RouteTable
 
@@ -45,14 +46,46 @@ def test_drone_state_advances_after_each_assignment(table, scenario):
             assert drone.battery_pct < 100.0
 
 
-def test_more_drones_never_lengthen_the_schedule(table, scenario):
+def test_the_full_fleet_substantially_beats_a_single_drone(table, scenario):
     """FR-11.7: quantifies the benefit the brief claims for a fleet."""
+    one = assign_fleet(table, scenario.drones[:1], list(scenario.deliveries))
+    allof = assign_fleet(table, scenario.drones, list(scenario.deliveries))
+    assert allof.makespan_min < one.makespan_min / 2
+
+
+def test_adding_a_drone_can_lengthen_the_schedule(table, scenario):
+    """Graham's timing anomaly, reproduced in this system.
+
+    List scheduling is not monotone in the number of machines: adding one can
+    make the makespan worse, because it changes every subsequent assignment
+    decision. Graham (1969) named this for identical machines; here battery
+    heterogeneity amplifies it, since a drone with less charge may be picked as
+    the earliest finisher for one delivery and then be slow for the rest.
+
+    The test asserts the anomaly exists rather than pretending it does not: a
+    suite that demanded monotonicity would be asserting something false about
+    greedy scheduling.
+    """
+    makespans = [
+        assign_fleet(table, scenario.drones[:n], list(scenario.deliveries)).makespan_min
+        for n in range(1, len(scenario.drones) + 1)
+    ]
+    assert any(b > a + 1e-9 for a, b in zip(makespans, makespans[1:])), (
+        "expected a non-monotone step somewhere in the fleet-size sweep")
+
+
+def test_the_anomaly_is_caused_by_battery_heterogeneity(table, scenario):
+    """Control: with identical full charges the sweep is monotone again.
+
+    This is what identifies the cause. Without it the anomaly above could be
+    blamed on the routing rather than on the scheduling interacting with state.
+    """
     previous = float("inf")
-    for n in (1, 2, 3):
-        plan = assign_fleet(table, scenario.drones[:n], list(scenario.deliveries))
-        if len(plan.unserviceable) == 0:
-            assert plan.makespan_min <= previous + 1e-9
-            previous = plan.makespan_min
+    for n in range(1, len(scenario.drones) + 1):
+        fleet = [Drone(f"D{i + 1}", table.graph.warehouse, 100.0) for i in range(n)]
+        plan = assign_fleet(table, fleet, list(scenario.deliveries))
+        assert plan.makespan_min <= previous + 1e-9, f"non-monotone at {n} drones"
+        previous = plan.makespan_min
 
 
 def test_urgent_packages_are_dispatched_first(table, scenario):
@@ -66,9 +99,9 @@ def test_urgent_packages_are_dispatched_first(table, scenario):
 def test_blocked_destination_is_reported_with_its_cause(table, scenario):
     """FR-8.3."""
     plan = assign_fleet(table, scenario.drones, list(scenario.deliveries),
-                        blocked_nodes={"C5": "Airport approach corridor"})
+                        blocked_nodes={"L19": "Kestrel Aerodrome approach"})
     reasons = {u.delivery_id: u.reason for u in plan.unserviceable}
-    assert any("Airport approach corridor" in r for r in reasons.values())
+    assert any("Kestrel Aerodrome approach" in r for r in reasons.values())
 
 
 def test_every_assignment_explains_itself(table, scenario):

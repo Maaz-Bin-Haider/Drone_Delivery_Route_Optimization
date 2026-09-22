@@ -56,5 +56,5 @@ def test_drone_with_impossible_battery_is_named(city, scenario):
 def test_the_shipped_map_is_valid(city, scenario):
     validate_graph(city)
     validate_scenario(city, scenario.drones, scenario.deliveries)
-    assert len(city.nodes) >= 20                       # FR-1.8
+    assert len(city.nodes) >= 30                       # FR-1.8
     assert len(city.charging_stations) >= 2

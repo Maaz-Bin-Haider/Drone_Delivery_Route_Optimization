@@ -61,14 +61,14 @@ def test_cache_is_reused_for_a_repeated_configuration(scenario):
 
 
 def test_active_zone_makes_its_interior_unserviceable(sim):
-    result = sim.plan(PlanConfig(active_zones=("nfz_airport",)))
+    result = sim.plan(PlanConfig(active_zones=("nfz_aerodrome",)))
     assert result["totals"]["unserviceable"] >= 1
     assert any("no-fly zone" in u["reason"] for u in result["unserviceable"])
 
 
 def test_comparison_endpoint_confirms_the_two_routers_agree(sim):
     """FR-11.6: a live admissibility check on every comparison."""
-    out = sim.compare("W", "C8", PlanConfig(weights=BALANCED, wind=Wind(13, 200)))
+    out = sim.compare("DEP", "L16", PlanConfig(weights=BALANCED, wind=Wind(13, 200)))
     assert out["agree"]
     assert out["expansion_ratio"] <= 1.0
 
@@ -84,15 +84,15 @@ def test_energy_weighting_reduces_energy_on_the_same_journey(sim, city):
     wind = Wind(16, 225)
     shortest = PlanConfig(weights=SHORTEST_DISTANCE, wind=wind)
     greenest = PlanConfig(weights=Weights(0.0, 1.0, 0.0), wind=wind)
-    for target in ("C3", "C4", "C8", "C10"):
-        a = sim.route("W", target, shortest)
-        b = sim.route("W", target, greenest)
+    for target in ("L16", "L17", "L18", "L21"):
+        a = sim.route("DEP", target, shortest)
+        b = sim.route("DEP", target, greenest)
         assert b.energy_pct <= a.energy_pct + 1e-9, target
 
 
 def test_alternatives_can_diverge_under_wind(sim):
     """The map must actually exhibit the Route A / Route B case (TDD 10.2)."""
-    out = sim.alternatives("C3", "C4", PlanConfig(wind=Wind(16, 225)))
+    out = sim.alternatives("L06", "L21", PlanConfig(wind=Wind(16, 225)))
     assert out["differ"], "expected the shortest and most efficient routes to differ"
     assert "less energy" in out["annotation"]
 
@@ -101,7 +101,7 @@ def test_wind_alone_can_change_the_chosen_route(sim):
     """FR-9.6."""
     paths = set()
     for bearing in range(0, 360, 45):
-        route = sim.route("C11", "C12", PlanConfig(weights=Weights(0.0, 1.0, 0.0),
+        route = sim.route("L04", "L17", PlanConfig(weights=Weights(0.0, 1.0, 0.0),
                                                    wind=Wind(16, bearing)))
         paths.add(route.path)
     assert len(paths) > 1, "wind bearing had no effect on the optimal route"

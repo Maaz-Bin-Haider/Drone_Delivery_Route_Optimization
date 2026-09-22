@@ -41,39 +41,58 @@
     return out;
   }
 
+  function heading(a, b) {
+    // Screen bearing in degrees clockwise from north. The map is north-up and
+    // the drone is drawn nose-up, so this is also the sprite's rotation.
+    const lat = (a[0] + b[0]) / 2 * Math.PI / 180;
+    const dy = b[0] - a[0];
+    const dx = (b[1] - a[1]) * Math.cos(lat);
+    if (Math.abs(dx) < 1e-12 && Math.abs(dy) < 1e-12) return 0;
+    return (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360;
+  }
+
   function pointAlong(leg, fraction) {
     const cum = leg.cum;
     const total = cum[cum.length - 1];
-    if (total <= 0) return leg.pts[0];
+    if (total <= 0) return { at: leg.pts[0], heading: 0 };
     const want = Math.max(0, Math.min(1, fraction)) * total;
     for (let i = 1; i < cum.length; i++) {
       if (cum[i] >= want) {
         const span = cum[i] - cum[i - 1];
         const t = span > 0 ? (want - cum[i - 1]) / span : 0;
         const a = leg.pts[i - 1], b = leg.pts[i];
-        return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+        return {
+          at: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t],
+          heading: heading(a, b)
+        };
       }
     }
-    return leg.pts[leg.pts.length - 1];
+    const n = leg.pts.length;
+    return { at: leg.pts[n - 1], heading: heading(leg.pts[n - 2], leg.pts[n - 1]) };
   }
 
   function positionsAt(t) {
     const out = {};
     Object.keys(timeline).forEach(function (id) {
       const legs = timeline[id];
-      let position = legs.length ? legs[0].pts[0] : null;
+      if (!legs.length) { out[id] = null; return; }
+      let state = { at: legs[0].pts[0], heading: 0, flying: false };
       for (let i = 0; i < legs.length; i++) {
         const leg = legs[i];
         if (t >= leg.end) {
-          position = leg.pts[leg.pts.length - 1];       // landed, waiting
+          const n = leg.pts.length;                     // landed, holding
+          state = { at: leg.pts[n - 1],
+                    heading: heading(leg.pts[n - 2], leg.pts[n - 1]),
+                    flying: false };
         } else if (t >= leg.start) {
-          position = pointAlong(leg, (t - leg.start) / (leg.end - leg.start));
+          const p = pointAlong(leg, (t - leg.start) / (leg.end - leg.start));
+          state = { at: p.at, heading: p.heading, flying: true };
           break;
         } else {
-          break;                                         // not departed yet
+          break;                                        // not departed yet
         }
       }
-      out[id] = position ? { at: position } : null;
+      out[id] = state;
     });
     return out;
   }

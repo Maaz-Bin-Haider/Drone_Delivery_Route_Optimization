@@ -1,14 +1,14 @@
 {
   "deliveries": [
-    {"id": "PKG-001", "destination": "C2",  "priority": "NORMAL"},
-    {"id": "PKG-002", "destination": "C7",  "priority": "URGENT"},
-    {"id": "PKG-003", "destination": "C5",  "priority": "NORMAL"},
-    {"id": "PKG-004", "destination": "C9",  "priority": "HIGH"},
-    {"id": "PKG-005", "destination": "C4",  "priority": "NORMAL"},
-    {"id": "PKG-006", "destination": "C8",  "priority": "HIGH"},
-    {"id": "PKG-007", "destination": "C10", "priority": "URGENT"},
-    {"id": "PKG-008", "destination": "C1",  "priority": "NORMAL"},
-    {"id": "PKG-009", "destination": "C3",  "priority": "NORMAL"},
-    {"id": "PKG-010", "destination": "C12", "priority": "HIGH"}
+    {"id": "PKG-001", "destination": "L06", "priority": "NORMAL"},
+    {"id": "PKG-002", "destination": "L08", "priority": "URGENT"},
+    {"id": "PKG-003", "destination": "L19", "priority": "NORMAL"},
+    {"id": "PKG-004", "destination": "L05", "priority": "HIGH"},
+    {"id": "PKG-005", "destination": "L17", "priority": "NORMAL"},
+    {"id": "PKG-006", "destination": "L16", "priority": "HIGH"},
+    {"id": "PKG-007", "destination": "L11", "priority": "URGENT"},
+    {"id": "PKG-008", "destination": "L01", "priority": "NORMAL"},
+    {"id": "PKG-009", "destination": "L13", "priority": "NORMAL"},
+    {"id": "PKG-010", "destination": "L22", "priority": "HIGH"}
   ]
 }

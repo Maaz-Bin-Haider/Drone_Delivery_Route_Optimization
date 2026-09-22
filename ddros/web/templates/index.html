@@ -37,12 +37,28 @@
       <span id="clock-label" class="mono">0.0 min</span>
     </div>
     <div class="map-hint">Drag to pan &middot; +/&minus; or Ctrl+wheel to zoom</div>
-    <div id="tile-notice" class="tile-notice" hidden>
-      Map tiles unavailable &mdash; the city graph is drawn without a base map.
-    </div>
   </section>
 
   <aside class="controls">
+    <h2>Demonstration plans</h2>
+    <p class="hint">Prepared batches, each built to show a different behaviour.</p>
+    <div id="preset-list"></div>
+
+    <h2>Orders <span id="order-count" class="mono"></span></h2>
+    <p class="hint">Pick a destination and a priority, or clear the batch and
+      build your own.</p>
+    <div class="order-form">
+      <select id="order-dest" aria-label="Destination"></select>
+      <select id="order-priority" aria-label="Priority">
+        <option value="URGENT">Urgent</option>
+        <option value="HIGH">High</option>
+        <option value="NORMAL" selected>Normal</option>
+      </select>
+      <button id="btn-add-order">Add</button>
+    </div>
+    <div id="order-list" class="order-list"></div>
+    <div class="presets"><button id="btn-clear-orders">Clear all orders</button></div>
+
     <h2>Routing objective</h2>
     <p class="hint">Weights always sum to 1. Moving one redistributes the rest.</p>
     <div class="slider-row">

@@ -80,6 +80,40 @@ def linear_fit(xs: list[float], ys: list[float]) -> dict:
 
 
 # --------------------------------------------------------------------------
+# landmark selection
+#
+# Experiments 3 and 7 need long journeys across the map. Deriving them from the
+# graph rather than naming node ids keeps the harness working when the city is
+# redrawn, which a hardcoded list would silently break.
+# --------------------------------------------------------------------------
+
+def _far_customers(graph, count: int) -> list[str]:
+    """The customers furthest from the warehouse, by straight-line distance."""
+    from ..geo import haversine_km
+    depot = graph.nodes[graph.warehouse]
+    customers = [n for n in graph.nodes.values() if n.type is NodeType.CUSTOMER]
+    customers.sort(
+        key=lambda n: -haversine_km(depot.lat, depot.lon, n.lat, n.lon))
+    return [n.id for n in customers[:count]]
+
+
+def _cross_map_pairs(graph) -> list[tuple[str, str]]:
+    """Three long traversals: west-east, south-north, and depot to the far edge."""
+    customers = [n for n in graph.nodes.values() if n.type is NodeType.CUSTOMER]
+    if len(customers) < 2:
+        return []
+    west = min(customers, key=lambda n: n.lon).id
+    east = max(customers, key=lambda n: n.lon).id
+    south = min(customers, key=lambda n: n.lat).id
+    north = max(customers, key=lambda n: n.lat).id
+    far = _far_customers(graph, 1)
+    pairs = [(west, east), (south, north)]
+    if far:
+        pairs.append((graph.warehouse, far[0]))
+    return [(a, b) for a, b in pairs if a != b]
+
+
+# --------------------------------------------------------------------------
 # Experiment 1 -- Dijkstra vs A*: nodes expanded
 # --------------------------------------------------------------------------
 
@@ -188,8 +222,9 @@ def experiment_2_growth(expansion: dict | None = None, **kwargs) -> dict:
 # Experiment 3 -- value of energy-aware routing
 # --------------------------------------------------------------------------
 
-def experiment_3_energy(scenario, betas: tuple[float, ...] = (0.0, 0.2, 0.4, 0.6, 0.8, 1.0),
-                        wind: Wind = Wind(16.0, 225.0)) -> dict:
+def experiment_3_energy(scenario,
+                        betas: tuple[float, ...] = (0.0, 0.1, 0.2, 0.3, 0.5, 0.75, 1.0),
+                        wind: Wind = Wind(18.0, 45.0)) -> dict:
     """Two measurements, deliberately separated.
 
     Per journey the brief's Route A / Route B claim holds. Per batch it does
@@ -198,11 +233,24 @@ def experiment_3_energy(scenario, betas: tuple[float, ...] = (0.0, 0.2, 0.4, 0.6
     than the per-route saving recovers. Conflating the two would hide the most
     instructive result in the project.
     """
+    from copy import deepcopy
+
     from ..simulation.orchestrator import PlanConfig, Simulator
 
     graph = scenario.graph
+    # The batch-level coupling only appears when batteries are under pressure,
+    # so the heaviest available preset is used rather than the light default
+    # batch. On a batch the fleet can absorb comfortably there is no detour to
+    # trigger and the effect is simply absent -- which is itself worth stating.
+    scenario = deepcopy(scenario)
+    if scenario.presets:
+        heaviest = max(scenario.presets, key=lambda p: len(p["deliveries"]))
+        scenario.replace_deliveries(heaviest["deliveries"])
+        batch_label = heaviest["name"]
+    else:
+        batch_label = "default batch"
     sim = Simulator(scenario)
-    journeys = [("W", t) for t in ("C3", "C4", "C8", "C10") if t in graph.nodes]
+    journeys = [(graph.warehouse, t) for t in _far_customers(graph, 4)]
 
     per_journey, per_batch = [], []
     for beta in betas:
@@ -242,6 +290,7 @@ def experiment_3_energy(scenario, betas: tuple[float, ...] = (0.0, 0.2, 0.4, 0.6
     return {
         "experiment": 3,
         "title": "Value of energy-aware routing",
+        "batch": batch_label,
         "wind": wind.as_dict(),
         "per_journey": per_journey,
         "per_batch": per_batch,
@@ -252,7 +301,12 @@ def experiment_3_energy(scenario, betas: tuple[float, ...] = (0.0, 0.2, 0.4, 0.6
         ),
         "finding": ("Per journey, weighting energy never costs more energy. Per batch "
                     "it can: slower energy-optimal routes delay drones and trigger "
-                    "charging detours whose extra leg outweighs the per-route saving."),
+                    "charging detours whose extra leg outweighs the per-route saving. "
+                    "The effect needs the fleet near its feasibility boundary -- on a "
+                    "batch the drones absorb comfortably, no detour is triggered and "
+                    "batch energy falls monotonically as the per-journey result "
+                    "predicts. The charging_detours column is what distinguishes the "
+                    "two regimes."),
     }
 
 
@@ -553,9 +607,7 @@ def experiment_7_environment(scenario, bearing_step: int = 30) -> dict:
     bearings = list(range(0, 360, bearing_step))
 
     sweeps = []
-    for source, target in (("C11", "C12"), ("C12", "C8"), ("W", "C8")):
-        if source not in graph.nodes or target not in graph.nodes:
-            continue
+    for source, target in _cross_map_pairs(graph):
         samples, distinct = [], set()
         for bearing in bearings:
             cm = CostModel(graph, MINIMUM_ENERGY, Wind(16.0, bearing))

@@ -3,7 +3,7 @@
 ## Drone Delivery Route Optimization System
 
 **Course:** Design & Analysis of Algorithms (DAA)
-**Document version:** 1.0
+**Document version:** 1.1
 **Date:** 22 September 2026
 **Prepared in accordance with:** IEEE Std 830-1998, *IEEE Recommended Practice for Software Requirements Specifications*
 
@@ -32,6 +32,7 @@
 | Version | Date | Description |
 |---|---|---|
 | 1.0 | 22 Sep 2026 | Initial specification derived from the approved project brief |
+| 1.1 | 22 Sep 2026 | Fictional city of Kestrel Bay (34 locations); fleet raised to five; operator-composed batches and prepared demonstration plans added |
 
 ---
 
@@ -63,9 +64,10 @@ authoritative statement of *what* the system must do. The companion
 **Product name:** Drone Delivery Route Optimization System (DDROS)
 
 DDROS is a **software simulation**. It does not interface with physical drone hardware,
-flight controllers, or live telemetry. It models a fleet of delivery drones operating over
-a weighted graph representation of a city and automates four decisions that a human
-dispatcher would otherwise make manually:
+flight controllers, or live telemetry. It models a fleet of five delivery drones operating
+over a weighted graph representation of **Kestrel Bay**, a fictional coastal city of
+thirty-four named locations, and automates four decisions that a human dispatcher would
+otherwise make manually:
 
 1. **Which delivery is handled next** — by priority rather than arrival order.
 2. **Which drone handles it** — by which aircraft can complete it earliest.
@@ -197,7 +199,7 @@ The system performs eight principal functions:
 | Ref | Function | Summary |
 |---|---|---|
 | F1 | **City modelling** | Load and validate a weighted graph of city locations and the air corridors connecting them. |
-| F2 | **Delivery intake** | Accept a batch of delivery requests, each with a destination and a priority class. |
+| F2 | **Delivery intake** | Accept a batch of delivery requests, each with a destination and a priority class, composed by the operator or loaded from a prepared demonstration plan. |
 | F3 | **Route optimization** | Compute an optimal route between two locations using Dijkstra's algorithm or A*, under a configurable composite cost. |
 | F4 | **Energy-aware routing** | Evaluate routes on energy consumption as well as distance, and reject routes exceeding a drone's usable charge. |
 | F5 | **Charging-station rerouting** | When no direct route is energy-feasible, plan a two-leg route through the charging station that minimises total cost. |
@@ -225,7 +227,7 @@ present an unexplained result.
 | C-1 | **Algorithms shall be implemented from first principles.** Dijkstra, A*, the min-heap priority queue and the greedy assignment strategy shall be written by the team. Calling a library shortest-path routine (e.g. `networkx.shortest_path`, `scipy.sparse.csgraph`) to satisfy FR-3 is prohibited, as it would defeat the academic purpose of the project. |
 | C-2 | Edge weights shall be non-negative, which is a precondition of Dijkstra's correctness. |
 | C-3 | The A* heuristic shall be admissible and consistent, and this property shall be justified in the design documentation. |
-| C-4 | The system shall run offline on a single machine with no internet access at run time, except for optional Leaflet base-map tiles. Degraded offline tile behaviour shall not break the application. |
+| C-4 | The system shall run offline on a single machine. Because the city is fictional and its backdrop is drawn from local data, no base-map or other network service is contacted at run time. |
 | C-5 | The implementation language shall be Python 3.11 or later. |
 | C-6 | The system shall run on Windows, macOS and Linux without modification. |
 | C-7 | The complete system shall be demonstrable within a 15-minute presentation slot. |
@@ -241,7 +243,7 @@ present an unexplained result.
 | A-2 | Drones fly at a constant nominal airspeed; acceleration, climb and descent profiles are not modelled. |
 | A-3 | Energy consumption is proportional to distance flown, scaled by a wind factor. Payload mass, temperature and battery age are not modelled. |
 | A-4 | Wind is uniform across the entire map and constant during a planning cycle. |
-| A-5 | All drones in the fleet are homogeneous in speed and battery capacity, differing only in current state of charge and position. |
+| A-5 | All drones in the fleet are homogeneous in speed and battery capacity, differing only in current state of charge and position. The supplied fleet of five drones starts at differing charges, which is what exposes the scheduling anomaly recorded in TDD §9.4. |
 | A-6 | Charging stations are always available; queuing for a charger is not modelled. |
 | A-7 | Delivery service time at the destination is a fixed constant, identical for all packages. |
 | A-8 | The complete delivery batch is known before planning begins. |
@@ -271,7 +273,8 @@ present an unexplained result.
 | UI-2 | The map panel **shall** render the city graph over a Leaflet base map, drawing nodes as type-distinguished markers (warehouse, customer, charging station, waypoint) and edges as connecting polylines. |
 | UI-3 | The map panel **shall** render active no-fly zones as shaded polygons visually distinct from all other map features. |
 | UI-4 | The map panel **shall** highlight each computed route as a coloured polyline, using one distinct colour per drone, with a legend mapping colours to drone identifiers. |
-| UI-5 | The map panel **shall** animate a drone marker travelling along its assigned route, with play, pause and reset controls. |
+| UI-5 | The map panel **shall** animate a drone marker travelling along its assigned route, with play, pause, reset and scrub controls on a shared clock. |
+| UI-5a | The drone marker **shall** be drawn as a recognisable rotorcraft, **shall** be oriented to its current heading, and **shall** visibly indicate flight — for example by animating its rotors — only while that drone is actually in transit. Motion **shall** respect a reduced-motion preference. |
 | UI-6 | The control panel **shall** provide continuous sliders for the cost weights α (distance), β (energy) and γ (time). |
 | UI-7 | The control panel **shall** provide controls for wind speed and wind bearing, and a toggle for each defined no-fly zone. |
 | UI-8 | The control panel **shall** provide a selector for the routing algorithm: Dijkstra, A*, or side-by-side comparison. |
@@ -279,6 +282,9 @@ present an unexplained result.
 | UI-10 | The results panel **shall** display, for every delivery, the fields mandated by FR-10.3. |
 | UI-11 | The interface **shall** report errors (unreachable destination, no feasible drone, invalid input) as a clear message identifying the affected delivery, and **shall not** fail silently. |
 | UI-12 | The interface **shall** be legible at a projector resolution of 1280×720 or greater. |
+| UI-13 | The control panel **shall** present the prepared demonstration plans with their names, descriptions and order counts, and loading one **shall** replan immediately. |
+| UI-14 | The control panel **shall** provide an order manager listing the current batch, with a control to remove any single order, a control to clear the batch, and a form to add an order by destination and priority. Destinations **shall** be offered by name and district, not by identifier. |
+| UI-15 | A wheel gesture over the map **shall** scroll the page rather than zoom the map, so the reader is never trapped above the results. Zoom **shall** remain available by explicit control. |
 
 #### 3.1.2 Hardware Interfaces
 
@@ -322,7 +328,9 @@ section of the originating project brief that mandates it.
 | FR-1.5 | The graph **shall** be stored as an adjacency list, giving O(V + E) space. | Must |
 | FR-1.6 | The system **shall** load the graph from a JSON map file and **shall** reject a malformed file with a diagnostic naming the offending element. | Must |
 | FR-1.7 | On load, the system **shall** validate that the graph is connected, that every edge references existing vertices, that no edge is a self-loop, and that all weights are non-negative. Validation failure **shall** abort the load with an explanatory error. | Must |
-| FR-1.8 | The supplied demonstration map **shall** contain at least 20 vertices, including exactly one warehouse, at least two charging stations and at least ten customer locations. | Must |
+| FR-1.8 | The supplied demonstration map **shall** contain at least 30 vertices, including exactly one warehouse, at least four charging stations and at least twenty customer locations. | Must |
+| FR-1.10 | The city **shall** be fictional. Every location **shall** carry an invented name and a named district, and the map **shall not** depict or be rendered over any real geography. | Must |
+| FR-1.11 | The system **shall** supply a drawn backdrop for the fictional city — water, watercourse, parks and district labels — so that no external base-map service is required at run time. | Must |
 | FR-1.9 | Edge distance **should** be derivable from vertex coordinates by the haversine formula, so that the map remains geometrically self-consistent and the A* heuristic remains admissible. | Should |
 
 ---
@@ -337,6 +345,10 @@ section of the originating project brief that mandates it.
 | FR-2.4 | The system **shall** load a delivery batch from JSON and **shall** additionally permit a request to be added interactively. | Must |
 | FR-2.5 | Each request **shall** record a submission sequence number, used to break ties between requests of equal priority. | Must |
 | FR-2.6 | The system **shall** maintain a status for each request: PENDING, ASSIGNED, DELIVERED or UNSERVICEABLE. | Must |
+| FR-2.7 | The operator **shall** be able to compose a batch by hand: adding an order by choosing a destination and a priority, removing an individual order, and clearing the batch entirely. | Must |
+| FR-2.8 | The system **shall** supply at least three prepared demonstration plans, each with a name and a description of the behaviour it exhibits, and the operator **shall** be able to load any of them in a single action. | Must |
+| FR-2.9 | Loading a plan **shall** replace the batch entirely and renumber it, so the loaded plan dispatches in its own order rather than inheriting the sequence of whatever it replaced. | Must |
+| FR-2.10 | An empty batch **shall** be a valid state, producing an empty plan rather than an error. | Must |
 
 ---
 
@@ -539,14 +551,16 @@ section of the originating project brief that mandates it.
 | Brief section | Subject | Requirements |
 |---|---|---|
 | §2.1 | Create a simulated city map | FR-1.1 – FR-1.9 |
-| §2.2 | Receive delivery requests | FR-2.1 – FR-2.6 |
+| §2.2 | Receive delivery requests | FR-2.1 – FR-2.10 |
 | §2.3 | Find the best route | FR-3.1 – FR-3.8 |
 | §2.4 | Consider battery / energy usage | FR-4.1 – FR-4.8, FR-5.1 – FR-5.7 |
 | §2.5 | Prioritize deliveries | FR-6.1 – FR-6.6 |
 | §2.6 | Divide work between multiple drones | FR-7.1 – FR-7.8 |
-| §2.7 | Show selected route and delivery information | FR-10.1 – FR-10.7, UI-1 – UI-12 |
+| §2.7 | Show selected route and delivery information | FR-10.1 – FR-10.7, UI-1 – UI-15 |
 | §3 | Algorithms and data structures used | FR-1.5, FR-3.1, FR-3.2, FR-6.1, FR-7.2, NFR-6 |
 | §4 | Main benefits of the project | FR-7.8, FR-11.7 (quantified evidence for the claimed benefits) |
+| — | Extension: fictional city and drawn backdrop | FR-1.10, FR-1.11 |
+| — | Extension: operator-composed batches and demonstration plans | FR-2.7 – FR-2.10, UI-13, UI-14 |
 | — | Extension: no-fly zones | FR-8.1 – FR-8.6 |
 | — | Extension: wind and weather | FR-9.1 – FR-9.7 |
 | — | DAA analysis obligation | FR-11.1 – FR-11.7, NFR-17 |

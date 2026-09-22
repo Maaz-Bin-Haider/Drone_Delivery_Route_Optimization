@@ -5,7 +5,7 @@ from ddros.scheduling.priority_queue import DeliveryQueue
 
 
 def make(idx, priority):
-    return DeliveryRequest(f"PKG-{idx:03d}", "C1", priority, idx)
+    return DeliveryRequest(f"PKG-{idx:03d}", "L01", priority, idx)
 
 
 def test_urgent_precedes_high_precedes_normal():

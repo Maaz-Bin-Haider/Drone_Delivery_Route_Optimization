@@ -9,14 +9,15 @@
   D.DASHES = [null, '10 6', '2 7', '14 4 3 4', '7 4', '1 7'];
 
   const NODE_STYLE = {
-    warehouse:        { kind: 'icon',   cls: 'n-warehouse', size: 16 },
-    charging_station: { kind: 'icon',   cls: 'n-charge',    size: 14 },
-    customer:         { kind: 'circle', radius: 6, color: '#16202b', fill: '#ffffff', weight: 2 },
-    waypoint:         { kind: 'circle', radius: 3, color: '#9aa8b5', fill: '#9aa8b5', weight: 1 }
+    warehouse:        { kind: 'icon',   cls: 'n-warehouse', size: 20 },
+    charging_station: { kind: 'icon',   cls: 'n-charge',    size: 17 },
+    customer:         { kind: 'circle', radius: 7.5, color: '#16202b', fill: '#ffffff', weight: 2.4 },
+    waypoint:         { kind: 'circle', radius: 4, color: '#9aa8b5', fill: '#9aa8b5', weight: 1.2 }
   };
 
   let map = null;
   let layers = {};
+  let refit = function () {};
   let nodesById = {};
   let droneColor = {};
   let tileWarned = false;
@@ -123,7 +124,7 @@
     scenario.edges.forEach(e => {
       const a = latlng(e.u), b = latlng(e.v);
       if (!a || !b) return;
-      L.polyline([a, b], { color: '#b6c3d0', weight: 1.4, opacity: 0.85 })
+      L.polyline([a, b], { color: '#b6c3d0', weight: 1.8, opacity: 0.9 })
         .bindTooltip(`${e.u} &ndash; ${e.v} &middot; ${e.distance_km} km`)
         .addTo(layers.edges);
     });
@@ -135,14 +136,16 @@
 
     // invalidateSize first: Leaflet caches the container dimensions, and fitting
     // against a stale size leaves the graph a speck in the middle of the map.
+    // The city is roughly square, so on a wide short panel the fit is limited by
+    // height; the padding is kept tight so the graph uses what height there is.
     const bounds = L.latLngBounds(scenario.nodes.map(n => [n.lat, n.lon]));
-    const fit = () => {
+    refit = function () {
       map.invalidateSize(false);
-      map.fitBounds(bounds, { padding: [34, 34] });
+      map.fitBounds(bounds, { padding: [18, 18] });
     };
-    fit();
-    setTimeout(fit, 120);
-    window.addEventListener('resize', () => setTimeout(fit, 80));
+    refit();
+    setTimeout(refit, 120);
+    window.addEventListener('resize', () => setTimeout(refit, 80));
   }
 
   function drawZones(zones, activeIds) {
@@ -183,7 +186,7 @@
       const idx = order[a.drone_id] || 0;
       L.polyline(pts, {
         color: colorFor(a.drone_id, idx),
-        weight: 3.6, opacity: 0.85,
+        weight: 4.4, opacity: 0.9,
         dashArray: dashFor(a.drone_id, idx)
       }).bindTooltip(
         `<strong>${a.delivery_id}</strong> &middot; ${a.drone_id}<br>` +
@@ -265,6 +268,7 @@
   function clearDrones() { layers.drones.clearLayers(); }
 
   D.map = { init, drawScenario, drawBackdrop, drawZones, drawPlan, latlng,
+            refit: () => refit(),
             colorFor, setDronePositions, clearDrones,
             nodes: () => nodesById };
 })();

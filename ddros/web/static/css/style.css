@@ -66,8 +66,12 @@ button.primary:hover { background: #005b8f; color: #fff; }
   gap: 14px; padding: 14px;
 }
 .map-panel { position: relative; }
+/* The city is roughly square, so map height is what governs how large it
+   renders. Take as much of the viewport as the header and playback bar leave,
+   within sensible bounds. */
 #map {
-  height: 560px; border-radius: var(--radius); background: #e8eef3;
+  height: clamp(560px, calc(100vh - 196px), 1040px);
+  border-radius: var(--radius); background: #e8eef3;
   border: 1px solid var(--line);
 }
 .map-overlay {
@@ -326,3 +330,23 @@ tbody tr:hover { background: #f7fafc; }
                   justify-content: space-between; gap: 8px; }
 .preset-card .t span { font-family: var(--mono); font-size: 11px; color: var(--muted); }
 .preset-card .s { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+
+
+/* ---- expand mode: the map takes the whole viewport ---- */
+.map-expand {
+  position: absolute; top: 12px; left: 52px; z-index: 600;
+  display: flex; align-items: center; gap: 5px;
+  background: rgba(255,255,255,0.95); font-size: 12px; padding: 5px 10px;
+}
+.map-expand .ico { font-size: 13px; line-height: 1; }
+
+body.map-expanded .stage { grid-template-columns: 1fr; padding: 8px; }
+body.map-expanded .controls,
+body.map-expanded .results,
+body.map-expanded .analysis { display: none; }
+body.map-expanded #map { height: calc(100vh - 118px); }
+body.map-expanded .topbar { padding: 8px 20px; }
+
+@media (max-width: 1100px) {
+  #map { height: clamp(420px, 62vh, 700px); }
+}

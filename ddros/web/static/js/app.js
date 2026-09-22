@@ -204,6 +204,22 @@
     document.getElementById('btn-reset').addEventListener('click', D.animation.reset);
     document.getElementById('clock').addEventListener('input',
       e => D.animation.seek(e.target.value));
+    const expand = document.getElementById('btn-expand');
+    function setExpanded(on) {
+      document.body.classList.toggle('map-expanded', on);
+      expand.querySelector('.txt').textContent = on ? 'Collapse' : 'Expand';
+      // Leaflet caches container dimensions, so the map must be told the panel
+      // changed size before it can refit to the new one.
+      setTimeout(() => D.map.refit(), 60);
+    }
+    expand.addEventListener('click',
+      () => setExpanded(!document.body.classList.contains('map-expanded')));
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && document.body.classList.contains('map-expanded')) {
+        setExpanded(false);
+      }
+    });
+
     document.getElementById('btn-add-order').addEventListener('click', addOrder);
     document.getElementById('btn-clear-orders').addEventListener('click', clearOrders);
     document.getElementById('btn-compare').addEventListener('click', comparePair);

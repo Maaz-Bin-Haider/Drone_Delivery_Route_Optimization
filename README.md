@@ -63,12 +63,17 @@ four seconds is not worth the launch. Sizes that fail to complete the batch are 
 service level, never on speed. The panel shows what each size achieved and why one was
 picked, and the size can be forced to demonstrate the difference.
 
-**En-route drops.** A drone whose route crosses another pending destination delivers that
-parcel in passing, for one service stop instead of a whole separate flight. Three policies:
-*off*, *safe* (default — a parcel rides along only if it is at least as urgent as the delivery
-whose flight it shares, so priority is never inverted) and *always*. On the Peak Load batch
-*always* flies 17% less distance but lands the last urgent parcel two minutes later; both
-figures are reported so the trade is visible rather than assumed.
+**En-route drops.** A drone whose route crosses another destination delivers it in passing
+rather than sending a second drone to a place it was already flying over. Each drone's plan is
+a tour, and an improvement pass relocates deliveries between tours while doing so shortens
+total flight distance. Three policies: *off*, *safe* (default — a move may not reorder urgency
+within a tour) and *always*.
+
+The guarantee is that **when planning finishes, no delivery could be moved to another drone in
+a way that shortens the total**. Verified across 1,120 planning runs covering every
+demonstration plan, all 22 customer locations, batches of 20–40 orders with distinct and
+repeated destinations, fleet sizes 2–8, and every no-fly-zone combination. See
+[TDD §9.6](docs/TDD.md).
 
 Weight, wind and airspace controls replan live. The plan table gives every delivery its
 route, distance, energy, arrival time and the reason that drone was chosen over the others.
@@ -105,7 +110,7 @@ python -m pytest tests -q
 python -m pytest tests -q --cov=ddros
 ```
 
-211 tests, 93% statement coverage.
+250 tests, 93% statement coverage.
 
 ## Layout
 

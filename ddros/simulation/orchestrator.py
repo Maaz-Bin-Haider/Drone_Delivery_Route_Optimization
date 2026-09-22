@@ -180,7 +180,8 @@ class Simulator:
                     f"!= A* {alt.cost!r}"
                 )
             out.append(replace(a, route=alt))
-        return FleetPlan(out, plan.unserviceable, plan.drones)
+        return FleetPlan(out, plan.unserviceable, plan.drones,
+                         plan.improvements, plan.distance_saved_km)
 
     def _render(self, plan: FleetPlan, config: PlanConfig, table: RouteTable,
                 cm: CostModel, sizing: FleetSizing) -> dict:
@@ -201,6 +202,10 @@ class Simulator:
                 "unserviceable": len(plan.unserviceable),
             },
             "fleet": sizing.as_dict(),
+            "improvement": {
+                "relocations": plan.improvements,
+                "distance_saved_km": plan.distance_saved_km,
+            },
             "assignments": [a.as_dict() for a in plan.assignments],
             "unserviceable": [u.as_dict() for u in plan.unserviceable],
             "drones": [

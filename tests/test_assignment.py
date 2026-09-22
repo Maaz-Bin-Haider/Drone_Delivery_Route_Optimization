@@ -95,12 +95,21 @@ def test_the_anomaly_survives_identical_batteries(table, scenario):
         "expected the anomaly to persist with identical batteries and no detours")
 
 
-def test_urgent_packages_are_dispatched_first(table, scenario):
+def test_each_tour_is_flown_in_priority_order(table, scenario):
+    """Priority governs the order a drone works through its own stops.
+
+    It cannot govern order *across* drones: several launch at once, so a routine
+    parcel on an idle drone necessarily departs alongside an urgent one on
+    another. Comparing departures fleet-wide would assert something the problem
+    does not permit.
+    """
     plan = assign_fleet(table, scenario.drones, list(scenario.deliveries))
-    departures = {a.delivery_id: a.depart_min for a in plan.assignments}
-    urgent = [p.id for p in scenario.deliveries if p.priority.name == "URGENT"]
-    normal = [p.id for p in scenario.deliveries if p.priority.name == "NORMAL"]
-    assert max(departures[u] for u in urgent) <= min(departures[n] for n in normal) + 1e-9
+    for drone in plan.drones:
+        legs = sorted((a for a in plan.assignments if a.drone_id == drone.id),
+                      key=lambda a: a.depart_min)
+        priorities = [a.priority for a in legs]
+        assert priorities == sorted(priorities), (
+            f"{drone.id} flies {[p.name for p in priorities]} out of order")
 
 
 def test_blocked_destination_is_reported_with_its_cause(table, scenario):

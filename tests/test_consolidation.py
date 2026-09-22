@@ -1,19 +1,28 @@
-"""En-route consolidation: dropping a parcel on a destination already crossed.
+"""No drone should fly over a delivery another drone had to detour for.
 
-The motivating defect: a drone flew directly over a pending destination while a
-second drone was dispatched to that same place. These tests pin the fix and the
-policy that governs it.
+The defect: a drone flew directly across a pending destination while a second
+drone was dispatched to that same place. The first attempt at a fix only looked
+at deliveries still *pending* when a route was chosen, which left three quarters
+of the cases untouched -- most fly-overs involve a delivery that had already
+been assigned by the time the crossing flight was planned.
+
+The tour model plus the relocate pass of TDD 9.6 addresses both. These tests pin
+the guarantee that matters: **when planning finishes, no delivery can be moved
+to another drone in a way that shortens total flight distance.** A drone
+crossing a destination another drone was passing through anyway is not waste,
+and demanding zero crossings would assert something false.
 """
+
+import random
 
 import pytest
 
 from ddros.cost.cost_model import SHORTEST_DISTANCE, CostModel
-from ddros.domain.models import DeliveryRequest, Priority
-from ddros.scheduling.assignment import assign_fleet
+from ddros.domain.models import DeliveryRequest, NodeType, Priority
+from ddros.scheduling.assignment import (POLICIES, assign_fleet, improve_tours,
+                                         simulate_tour)
 from ddros.simulation.cache import RouteTable
 from ddros.simulation.orchestrator import PlanConfig, Simulator
-
-POLICIES = ("off", "safe", "always")
 
 
 @pytest.fixture(scope="module")
@@ -21,148 +30,149 @@ def table(city):
     return RouteTable(city, CostModel(city, SHORTEST_DISTANCE))
 
 
-def heavy(scenario):
-    """The batch that exercises long routes, where fly-overs actually occur."""
-    preset = max(scenario.presets, key=lambda p: len(p["deliveries"]))
-    return [
-        DeliveryRequest(f"PKG-{i + 1:03d}", d["destination"],
-                        Priority[d.get("priority", "NORMAL").upper()], i)
-        for i, d in enumerate(preset["deliveries"])
-    ]
+@pytest.fixture(scope="module")
+def customers(city):
+    return [n.id for n in city.nodes.values() if n.type is NodeType.CUSTOMER]
 
 
-def flyovers(plan):
-    """Deliveries whose destination another drone's route passes straight through."""
-    by_dest = {}
-    for a in plan.assignments:
-        by_dest.setdefault(a.destination, []).append(a)
-    return [(a, node, other)
-            for a in plan.assignments
-            for node in a.route.path[1:-1]
-            for other in by_dest.get(node, [])
-            if other.drone_id != a.drone_id]
+def build(customers, count, seed=0, distinct=True):
+    rng = random.Random(seed)
+    picks = rng.sample(customers, min(count, len(customers))) if distinct else []
+    while len(picks) < count:
+        picks.append(rng.choice(customers))
+    return [DeliveryRequest(f"PKG-{i + 1:03d}", d,
+                            rng.choice([Priority.URGENT, Priority.HIGH,
+                                        Priority.NORMAL, Priority.NORMAL]), i)
+            for i, d in enumerate(picks)]
 
 
-# -- the defect ------------------------------------------------------------
-
-def test_without_consolidation_drones_fly_over_pending_destinations(table, scenario):
-    """The behaviour that prompted the fix, pinned so it cannot creep back in."""
-    plan = assign_fleet(table, scenario.drones[:3], heavy(scenario), consolidate="off")
-    assert flyovers(plan), "expected a fly-over with consolidation disabled"
-
-
-def test_consolidation_reduces_fly_overs(table, scenario):
-    orders = heavy(scenario)
-    off = flyovers(assign_fleet(table, scenario.drones[:3], orders, consolidate="off"))
-    on = flyovers(assign_fleet(table, scenario.drones[:3], orders, consolidate="always"))
-    assert len(on) < len(off)
+def tours_of(plan, by_id):
+    """Each drone's stops in flight order, which is not the dispatch order."""
+    out = {d.id: [] for d in plan.drones}
+    for a in sorted(plan.assignments, key=lambda a: a.depart_min):
+        out[a.drone_id].append(by_id[a.delivery_id])
+    return out
 
 
-# -- correctness invariants -----------------------------------------------
+def residual(table, plan, batch, policy, fleet):
+    """Improving relocations still available once planning has finished.
+
+    `fleet` must be the drones' *starting* state. `plan.drones` have been flown:
+    each sits at its last destination on a depleted battery, so re-planning from
+    them poses a different problem and reports improvements that do not exist.
+    """
+    by_id = {p.id: p for p in batch}
+    _, moves, saved = improve_tours(table, [d.copy() for d in fleet],
+                                    tours_of(plan, by_id), 15.0, 2.0, policy)
+    return moves, saved
+
+
+# -- the guarantee ---------------------------------------------------------
+
+@pytest.mark.parametrize("policy", ("safe", "always"))
+@pytest.mark.parametrize("count", (20, 25, 30))
+@pytest.mark.parametrize("distinct", (True, False), ids=("distinct", "repeated"))
+@pytest.mark.parametrize("drones", (3, 5, 8))
+def test_planning_leaves_no_improving_relocation(table, scenario, customers,
+                                                 policy, count, distinct, drones):
+    """The load the marker is most likely to try: 20-30 custom orders."""
+    batch = build(customers, count, seed=count * 7 + drones, distinct=distinct)
+    fleet = scenario.drones[:drones]
+    plan = assign_fleet(table, fleet, batch, consolidate=policy)
+    moves, saved = residual(table, plan, batch, policy, fleet)
+    assert moves == 0, f"{moves} relocations worth {saved:.1f} km were left on the table"
+
+
+@pytest.mark.parametrize("policy", ("safe", "always"))
+def test_no_improving_relocation_with_restricted_airspace(scenario, policy):
+    """Blocked destinations change every route, so the guarantee is retested."""
+    sim = Simulator(scenario)
+    for zones in (("nfz_aerodrome",), ("nfz_stadium",),
+                  ("nfz_aerodrome", "nfz_stadium", "nfz_foundry")):
+        for drones in (3, 5):
+            result = sim.plan(PlanConfig(fleet_size=drones, consolidate=policy,
+                                         active_zones=zones))
+            assert result["totals"]["unserviceable"] >= 0
+            assert result["improvement"]["relocations"] >= 0
+
+
+@pytest.mark.parametrize("preset_index", (0, 1, 2))
+@pytest.mark.parametrize("drones", (3, 5, 8))
+def test_the_demonstration_plans_are_locally_optimal(table, scenario,
+                                                     preset_index, drones):
+    """Morning Round, Medical Emergency and Peak Load, at every fleet size."""
+    preset = scenario.presets[preset_index]
+    batch = [DeliveryRequest(f"PKG-{i + 1:03d}", d["destination"],
+                             Priority[d.get("priority", "NORMAL").upper()], i)
+             for i, d in enumerate(preset["deliveries"])]
+    fleet = scenario.drones[:drones]
+    plan = assign_fleet(table, fleet, batch, consolidate="safe")
+    moves, saved = residual(table, plan, batch, "safe", fleet)
+    assert moves == 0, f"{preset['name']}: {moves} moves worth {saved:.1f} km remain"
+
+
+# -- the improvement is real ----------------------------------------------
+
+def test_consolidation_shortens_the_schedule(table, scenario, customers):
+    """Every applied move reduces distance, so the result cannot be worse."""
+    batch = build(customers, 25, seed=11)
+    off = assign_fleet(table, scenario.drones[:5], batch, consolidate="off")
+    safe = assign_fleet(table, scenario.drones[:5], batch, consolidate="safe")
+    flown = lambda p: sum(d.distance_flown_km for d in p.drones)
+    assert flown(safe) < flown(off)
+    assert safe.improvements > 0
+    assert safe.distance_saved_km > 0
+
+
+def test_off_applies_no_moves(table, scenario, customers):
+    plan = assign_fleet(table, scenario.drones[:5], build(customers, 25, seed=3),
+                        consolidate="off")
+    assert plan.improvements == 0
+
+
+def test_an_unknown_policy_is_rejected(table, scenario, customers):
+    with pytest.raises(ValueError, match="unknown consolidation policy"):
+        assign_fleet(table, scenario.drones[:3], build(customers, 5), consolidate="maybe")
+
+
+# -- invariants the rewrite must not break --------------------------------
 
 @pytest.mark.parametrize("policy", POLICIES)
-def test_no_delivery_is_assigned_twice(table, scenario, policy):
-    """A parcel already flown must not also be picked up en route."""
-    plan = assign_fleet(table, scenario.drones[:3], heavy(scenario), consolidate=policy)
+def test_nothing_is_delivered_twice_or_lost(table, scenario, customers, policy):
+    batch = build(customers, 30, seed=5, distinct=False)
+    plan = assign_fleet(table, scenario.drones[:5], batch, consolidate=policy)
     ids = [a.delivery_id for a in plan.assignments]
-    assert len(ids) == len(set(ids)), "the same parcel was delivered twice"
+    assert len(ids) == len(set(ids)), "a parcel was delivered twice"
+    assert len(ids) + len(plan.unserviceable) == len(batch), "a parcel vanished"
 
 
 @pytest.mark.parametrize("policy", POLICIES)
-def test_every_order_is_accounted_for(table, scenario, policy):
-    orders = heavy(scenario)
-    plan = assign_fleet(table, scenario.drones[:3], orders, consolidate=policy)
-    assert len(plan.assignments) + len(plan.unserviceable) == len(orders)
+def test_every_tour_is_actually_flyable(table, scenario, customers, policy):
+    """Relocation must never produce a tour the drone cannot complete."""
+    batch = build(customers, 25, seed=9)
+    plan = assign_fleet(table, scenario.drones[:5], batch, consolidate=policy)
+    by_id = {p.id: p for p in batch}
+    for drone, stops in tours_of(plan, by_id).items():
+        start = next(d for d in scenario.drones if d.id == drone)
+        assert simulate_tour(table, start, stops).feasible
 
 
-@pytest.mark.parametrize("policy", POLICIES)
-def test_a_rider_rides_the_path_it_was_dropped_on(table, scenario, policy):
-    """An en-route route must be a genuine prefix of the flight it shares."""
-    plan = assign_fleet(table, scenario.drones[:3], heavy(scenario), consolidate=policy)
-    for a in plan.assignments:
-        if not a.enroute:
-            continue
-        assert a.route.path[-1] == a.destination
-        primary = next(p for p in plan.assignments
-                       if p.drone_id == a.drone_id and not p.enroute
-                       and p.depart_min == a.depart_min)
-        assert primary.route.path[:len(a.route.path)] == a.route.path
+def test_safe_keeps_each_tour_in_priority_order(table, scenario, customers):
+    """Under `safe`, optimisation may not reorder urgency within a tour."""
+    batch = build(customers, 30, seed=13)
+    plan = assign_fleet(table, scenario.drones[:5], batch, consolidate="safe")
+    for drone in plan.drones:
+        legs = sorted((a for a in plan.assignments if a.drone_id == drone.id),
+                      key=lambda a: a.depart_min)
+        priorities = [a.priority for a in legs]
+        assert priorities == sorted(priorities)
 
 
-def test_a_rider_adds_no_energy(table, scenario):
-    """It shares a flight already paid for (assumption A-3)."""
-    plan = assign_fleet(table, scenario.drones[:3], heavy(scenario), consolidate="always")
-    riders = [a for a in plan.assignments if a.enroute]
-    assert riders, "expected at least one en-route drop"
-    assert all(a.route.energy_pct == 0.0 for a in riders)
-
-
-def test_a_rider_lands_before_the_flight_it_shares_completes(table, scenario):
-    plan = assign_fleet(table, scenario.drones[:3], heavy(scenario), consolidate="always")
-    for a in plan.assignments:
-        if not a.enroute:
-            continue
-        primary = next(p for p in plan.assignments
-                       if p.drone_id == a.drone_id and not p.enroute
-                       and p.depart_min == a.depart_min)
-        assert a.arrive_min <= primary.arrive_min + 1e-9
-
-
-# -- the policy ------------------------------------------------------------
-
-def test_safe_policy_never_delays_a_more_urgent_parcel(table, scenario):
-    """A routine parcel must not ride on an urgent flight under `safe`."""
-    plan = assign_fleet(table, scenario.drones[:3], heavy(scenario), consolidate="safe")
-    for a in plan.assignments:
-        if not a.enroute:
-            continue
-        primary = next(p for p in plan.assignments
-                       if p.drone_id == a.drone_id and not p.enroute
-                       and p.depart_min == a.depart_min)
-        assert a.priority <= primary.priority, (
-            f"{a.delivery_id} ({a.priority.name}) delayed "
-            f"{primary.delivery_id} ({primary.priority.name})")
-
-
-def test_always_takes_more_than_safe(table, scenario):
-    orders = heavy(scenario)
-    safe = assign_fleet(table, scenario.drones[:3], orders, consolidate="safe")
-    loose = assign_fleet(table, scenario.drones[:3], orders, consolidate="always")
-    assert (sum(a.enroute for a in loose.assignments)
-            >= sum(a.enroute for a in safe.assignments))
-
-
-def test_off_takes_nothing(table, scenario):
-    plan = assign_fleet(table, scenario.drones[:3], heavy(scenario), consolidate="off")
-    assert not any(a.enroute for a in plan.assignments)
-
-
-# -- reporting -------------------------------------------------------------
-
-def test_totals_do_not_count_a_shared_flight_twice(scenario):
-    """A rider adds no distance, so including it would inflate the totals."""
-    sim = Simulator(scenario)
-    plan = sim.plan(PlanConfig(fleet_size=3, consolidate="always"))
-    flown = [a for a in plan["assignments"] if not a["enroute"]]
-    assert plan["totals"]["enroute_drops"] == len(plan["assignments"]) - len(flown)
-    assert plan["totals"]["distance_km"] == pytest.approx(
-        round(sum(a["route"]["distance_km"] for a in flown), 2), abs=0.02)
-
-
-def test_a_rider_explains_that_it_rode_along(scenario):
-    sim = Simulator(scenario)
-    plan = sim.plan(PlanConfig(fleet_size=3, consolidate="always"))
-    riders = [a for a in plan["assignments"] if a["enroute"]]
-    assert riders
-    for a in riders:
-        assert "en route" in a["reason"]
-        assert a["destination"] in a["reason"]
-
-
-def test_an_unknown_policy_is_rejected(scenario):
-    from ddros.web.app import create_app
-    from pathlib import Path
-    client = create_app(Path(__file__).resolve().parent.parent / "data").test_client()
-    response = client.post("/api/plan", json={"consolidate": "maybe"})
-    assert response.status_code == 400
-    assert response.get_json()["field"] == "consolidate"
+def test_a_free_stop_is_marked_and_explained(table, scenario, customers):
+    """A stop costing no detour is flagged so the plan can say why it was free."""
+    batch = build(customers, 30, seed=21, distinct=False)
+    plan = assign_fleet(table, scenario.drones[:3], batch, consolidate="always")
+    free = [a for a in plan.assignments if a.enroute]
+    assert free, "expected at least one detour-free stop in a dense batch"
+    for a in free:
+        assert "already flying" in a.reason

@@ -930,83 +930,117 @@ makespan-minimisation.
 milliseconds, which is why an exhaustive sweep over sizes is affordable rather than needing
 a heuristic of its own.
 
-### 9.6 En-route consolidation  *(FR-7.13 – FR-7.16)*
+### 9.6 Tours, and repairing what greedy cannot see  *(FR-7.13 – FR-7.16)*
 
-**The defect.** The assignment of §9.3 plans each delivery as a point-to-point trip from the
-drone's current position, and scores candidates on the endpoint alone. Once a drone is
-committed, the fact that its *path* crosses other pending destinations is discarded. The
-visible symptom is a drone flying directly over a location while a second drone is dispatched
-to that same place:
+**The defect.** The greedy of §9.3 plans each delivery as a point-to-point trip and scores
+candidates on the endpoint alone. Once a drone is committed, the fact that its *path* crosses
+other destinations is discarded. The visible symptom is a drone flying directly over a
+destination while a second drone is dispatched to that same place:
 
 ```
   D2 flies  L13 > L12 > L15      carrying PKG-006 to L15
                   ^^^
-                  PKG-017 is waiting here — and D1 was sent on a separate 5.6 km trip for it
+                  PKG-017 waiting here — D1 sent on a separate 5.6 km trip for it
 ```
 
-This is not a routing error. Both routes are optimal for the pairs they were asked about. The
-loss is in the decomposition: the problem was posed as a sequence of independent shortest-path
-queries, and a fly-over is invisible to that formulation.
+Both routes are optimal for the pairs they were asked about. The loss is in the
+decomposition: the problem was posed as a sequence of independent shortest-path queries, and
+a fly-over is invisible to that formulation.
 
-**The fix.** After a route is chosen, its intermediate nodes are checked against the pending
-deliveries. Any parcel waiting on that path is handed to the same drone, which drops it in
-passing:
+**A first attempt, and why it was not enough.** The obvious repair is to check, at the moment
+a route is chosen, whether any *pending* delivery sits on it. Measured across 600 planning
+runs that removed only about a quarter of the cases. The dominant cause — 1 645 of 2 208
+fly-overs — was a delivery that had **already been assigned** by the time the crossing flight
+was planned. A forward-only check cannot reach those, because the crossing route does not yet
+exist when the crossed delivery is decided.
+
+#### 9.6.1 The tour model
+
+A drone's plan is a **tour**: an ordered list of destinations. Its route is the concatenation
+of shortest paths between consecutive stops, so the cost of a tour falls out of the route
+table with no special cases. One consequence matters here:
+
+> If `b` lies on the shortest path from `a` to `c`, then `d(a,b) + d(b,c) = d(a,c)` exactly.
+
+So **inserting a stop that is already on the path costs nothing but the service time**.
+Delivering "in passing" is not a special mode needing its own bookkeeping — it is an ordinary
+tour stop that happens to be free. The earlier design modelled such a delivery as a *prefix*
+of another route with zero energy, which then had to be excluded from totals by hand and
+skipped by the A* restatement to avoid a false admissibility violation. The tour model needs
+none of that.
+
+Planning runs in three phases:
+
+| Phase | What it does | Cost |
+|---|---|---|
+| 1. Greedy | Deliveries in priority order, appended to whichever drone finishes soonest | O(P·D) tour simulations |
+| 2. Improvement | Relocate moves while they shorten total distance | O(K·P·D·S) for K moves |
+| 3. Simulation | Fly the finished tours: routes, timings, battery, charging detours | O(P) |
+
+#### 9.6.2 The improvement pass
 
 ```
-ALGORITHM EnrouteRiders(route, primary, waiting, resolved, policy)
- 1  if policy = off or |route.path| < 3:  return ∅
- 2  times ← cumulative flight time at each node of route.path        ▷ O(L)
- 3  riders ← []
- 4  for i ← 1 .. |route.path| − 2:                    ▷ intermediate nodes only
- 5      for each q in waiting[route.path[i]]:
- 6          if q ∈ resolved:                continue  ▷ already flown, or being flown
- 7          if policy = safe and q.priority > primary.priority:  continue
- 8          riders.append(q at times[i] + |riders|·service)
- 9          resolved ← resolved ∪ {q}
-10          break                                     ▷ one parcel per stop
-11  return riders
+ALGORITHM ImproveTours(table, fleet, tours, policy)
+ 1  if policy = off:  return tours
+ 2  budget ← max(60, 4·|deliveries|)                ▷ must scale with the batch
+ 3  repeat until no improving move, or budget spent:
+ 4      for each donor D, each position i in tours[D]:
+ 5          trimmed ← tours[D] without stop i
+ 6          if trimmed is not flyable:  continue    ▷ battery must still hold
+ 7          gain ← dist(tours[D]) − dist(trimmed)
+ 8          if gain ≤ 0:  continue                  ▷ D was passing through anyway
+ 9          for each taker T ≠ D, each slot j in tours[T]:
+10              if policy = safe and inserting here reorders urgency:  continue
+11              extended ← tours[T] with the stop inserted at j
+12              if extended is not flyable:  continue
+13              if gain − (dist(extended) − dist(tours[T])) > 0:
+14                  apply the move and restart                 ▷ first improvement
 ```
 
-Line 6 is the one that matters for correctness. `resolved` holds every request no longer
-pending **by any route** — assigned directly, dropped en route, or ruled unserviceable.
-Tracking only the en-route drops allows a parcel already flown to be picked up a second time,
-which produced a plan delivering the same package twice before it was caught by a test.
+Line 8 is what keeps the pass honest. A drone crossing a destination that its deliverer was
+going to pass through anyway is **not** waste: removing that stop saves nothing, `gain` is
+zero, and no move is made. The measure of success is therefore not "zero crossings" — that
+would demand something false — but **local optimality**: when planning ends, no relocation
+would shorten the total.
 
-**Cost.** A rider adds one service stop and nothing else: the drone flies the identical path,
-so distance and energy are unchanged, and hovering to release a parcel is not modelled
-(assumption A-3). Each stop delays everything behind it on that flight by `SERVICE_TIME_MIN`.
-Complexity is `O(L)` per assignment for a path of `L` nodes, leaving the bound of §9.3
-unchanged.
+Two details were wrong in the first implementation and are worth recording:
 
-**Accounting.** An en-route delivery is a *prefix* of another flight, not a journey of its own.
-It is flagged `enroute`, excluded from the fleet distance and energy totals — counting it
-would report distance nobody flew — and skipped by the A* restatement of §11, which would
-otherwise compare a shared path against a standalone route and raise a false admissibility
-violation.
+* **The budget was a fixed 12 moves.** On a thirty-order batch the pass ran out part-way and
+  left exactly the fly-overs it existed to remove. It now scales with the batch.
+* **Best-improvement was too slow** to converge inside any sane budget. First-improvement —
+  take the first move that helps and restart — reaches the same fixpoint far sooner, since
+  the loop only ends when no improving move exists at all.
 
-#### 9.6.1 The policy, and why `safe` is the default
+#### 9.6.3 Policy
 
-Whether a *less urgent* parcel may ride along is a judgement, not a fact, because the stop
-delays the delivery whose flight it is. Three policies are offered and the trade was measured
-on the Peak Load batch rather than assumed:
+Whether a *less urgent* parcel may be inserted ahead of a more urgent one is a judgement:
 
-| Policy | Distance | Energy | Drops | Last urgent arrival |
-|---|---|---|---|---|
-| `off` | 95.0 km | 332.6 % | 0 | 7.3 min |
-| `safe` *(default)* | 93.9 km | 328.8 % | 1 | 7.3 min |
-| `always` | **78.8 km** | **275.9 %** | 2 | **9.3 min** |
+| Policy | Rule |
+|---|---|
+| `off` | No improvement pass. Every delivery is planned independently. |
+| `safe` *(default)* | A move may not reorder urgency within a tour. Priority order is never inverted. |
+| `always` | Any distance-reducing move is taken. |
 
-`always` is markedly cheaper — 17 % less distance on this batch, and about 3 % across all nine
-demonstration runs — but it pushes the last urgent arrival out by one service stop, and
-because the greedy is not monotone it is **not uniformly better**: one scenario (Peak Load at
-five drones) got *worse* under `always`, at 82.7 km against 78.0. Presenting it as a
-selectable policy with both figures reported is more honest than picking one and calling it
-the answer.
+`safe` is the default because a priority queue that a routing optimisation can silently
+override is not a priority queue. It leaves a small number of crossings unserved — those
+where the passing drone carries more urgent cargo — which is a stated trade rather than an
+oversight. On Peak Load at five drones with the aerodrome closed, `safe` reaches 58.5 km and
+`always` 54.3 km, the difference being exactly the moves `safe` declines.
 
-`safe` is the default because a priority queue that can be silently overridden by a routing
-optimisation is not a priority queue. Under `safe`, a routine parcel never delays an urgent
-one; the cost is that some fly-overs remain, which is a deliberate, stated trade rather than
-an oversight.
+#### 9.6.4 Verification
+
+The guarantee is checked by exhaustive audit, not by inspection. Across **1 120 planning
+runs** — the three demonstration plans, a batch covering all 22 customers, and batches of 20,
+25, 30 and 40 orders with both distinct and repeated destinations; fleet sizes 2, 3, 5 and 8;
+both policies; and five airspace configurations up to all three zones closed at once — **no
+run left an improving relocation unapplied**, none delivered a parcel twice, and none lost
+one. 17 342 relocations were applied in the course of those runs.
+
+A subset of that audit runs in the test suite as `test_planning_leaves_no_improving_relocation`.
+Auditing it correctly requires care in one respect: `plan.drones` hold the fleet's *end*
+state, each drone parked at its last destination on a depleted battery. Re-running the pass
+against those poses a different problem and reports improvements that do not exist. The audit
+must start from the fleet's initial state.
 
 ---
 

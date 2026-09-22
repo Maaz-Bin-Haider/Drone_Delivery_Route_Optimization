@@ -89,7 +89,8 @@ def size_fleet(table: RouteTable, roster: list[Drone],
                service_min: float = SERVICE_TIME_MIN,
                blocked_nodes: dict[str, str] | None = None,
                tolerance: float = DEFAULT_TOLERANCE,
-               fixed: int | None = None) -> FleetSizing:
+               fixed: int | None = None,
+               consolidate: str = "safe") -> FleetSizing:
     """Plan with every fleet size and keep the smallest one that is good enough.
 
     `fixed` overrides the choice, so an operator can force a size and see what
@@ -102,7 +103,7 @@ def size_fleet(table: RouteTable, roster: list[Drone],
 
     if not deliveries:
         empty = assign_fleet(table, ordered[:1], [], reserve_pct,
-                             service_min, blocked_nodes)
+                             service_min, blocked_nodes, consolidate)
         return FleetSizing(0, "no orders to deliver", [], empty, [],
                            [d.id for d in ordered])
 
@@ -113,7 +114,7 @@ def size_fleet(table: RouteTable, roster: list[Drone],
     for k in sizes:
         k = max(1, min(int(k), len(ordered)))
         plan = assign_fleet(table, ordered[:k], deliveries, reserve_pct,
-                            service_min, blocked_nodes)
+                            service_min, blocked_nodes, consolidate)
         plans[k] = plan
         options.append(SizingOption(
             drones=k,

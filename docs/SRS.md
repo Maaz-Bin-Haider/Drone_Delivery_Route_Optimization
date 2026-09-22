@@ -3,7 +3,7 @@
 ## Drone Delivery Route Optimization System
 
 **Course:** Design & Analysis of Algorithms (DAA)
-**Document version:** 1.2
+**Document version:** 1.3
 **Date:** 22 September 2026
 **Prepared in accordance with:** IEEE Std 830-1998, *IEEE Recommended Practice for Software Requirements Specifications*
 
@@ -34,6 +34,7 @@
 | 1.0 | 22 Sep 2026 | Initial specification derived from the approved project brief |
 | 1.1 | 22 Sep 2026 | Fictional city of Kestrel Bay (34 locations); fleet raised to five; operator-composed batches and prepared demonstration plans added |
 | 1.2 | 22 Sep 2026 | Roster of eight with automatic fleet sizing; parcel-release animation on delivery; map sizing requirements |
+| 1.3 | 22 Sep 2026 | En-route consolidation: a drone crossing a pending destination delivers it in passing |
 
 ---
 
@@ -429,6 +430,10 @@ section of the originating project brief that mandates it.
 | FR-7.10 | Fleet sizes **shall** be compared on service level before speed. A fleet too small to complete the batch posts a shorter makespan only because it delivered less, and **shall not** be selected on that basis. | Must |
 | FR-7.11 | The operator **shall** be able to override the selected size and force any size within the roster, so the effect of the choice can be demonstrated. | Must |
 | FR-7.12 | The system **shall** report which sizes were evaluated, what each achieved, and why the chosen one was selected. | Must |
+| FR-7.13 | Where a drone's chosen route passes through the destination of another pending delivery, the system **shall** be able to deliver that parcel in passing rather than dispatching a second drone to a location already being overflown. | Must |
+| FR-7.14 | En-route consolidation **shall** be governed by a selectable policy: **off**, **safe** (a parcel may ride along only if it is at least as urgent as the delivery whose route it is on) or **always**. The default **shall** be **safe**, so priority order is never inverted without the operator asking for it. | Must |
+| FR-7.15 | An en-route delivery **shall** add no distance and no energy to the fleet totals, since it shares a flight already accounted for, and its route **shall** be reported as the prefix of that flight up to the drop point. | Must |
+| FR-7.16 | No delivery **shall** be assigned more than once, by any combination of direct assignment and en-route consolidation. | Must |
 
 ---
 
@@ -566,6 +571,7 @@ section of the originating project brief that mandates it.
 | §2.6 | Divide work between multiple drones | FR-7.1 – FR-7.12 |
 | §2.7 | Show selected route and delivery information | FR-10.1 – FR-10.7, UI-1 – UI-15 |
 | §3 | Algorithms and data structures used | FR-1.5, FR-3.1, FR-3.2, FR-6.1, FR-7.2, NFR-6 |
+| §4.5 | Reduced operational cost | FR-7.13 – FR-7.15 (en-route consolidation) |
 | §4 | Main benefits of the project | FR-7.8, FR-11.7 (quantified evidence for the claimed benefits) |
 | — | Extension: fictional city and drawn backdrop | FR-1.10, FR-1.11 |
 | — | Extension: operator-composed batches and demonstration plans | FR-2.7 – FR-2.10, UI-13, UI-14 |

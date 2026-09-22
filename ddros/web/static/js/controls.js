@@ -31,7 +31,8 @@
       algorithm: document.querySelector('input[name=algo]:checked').value,
       reserve_pct: Number(el('reserve').value),
       // 0 on the slider means "choose for me"; the API reads null as auto.
-      fleet_size: Number(el('fleet-size').value) || null
+      fleet_size: Number(el('fleet-size').value) || null,
+      consolidate: document.querySelector('input[name=consolidate]:checked').value
     };
   }
 
@@ -111,7 +112,7 @@
         syncReadouts();
         deferred();                    // one request per drag, not dozens
       }));
-    document.querySelectorAll('input[name=algo]')
+    document.querySelectorAll('input[name=algo], input[name=consolidate]')
       .forEach(i => i.addEventListener('change', onChange));
     document.querySelectorAll('.presets button[data-preset]')
       .forEach(btn => btn.addEventListener('click', function () {

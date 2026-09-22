@@ -116,6 +116,18 @@
       <output id="out-fleet" class="mono">auto</output>
     </div>
 
+    <h2>En-route drops</h2>
+    <p class="hint">A drone crossing another pending destination can drop that
+      parcel in passing, for one service stop instead of a whole flight.</p>
+    <div class="radio-col">
+      <label><input type="radio" name="consolidate" value="off"> Off &mdash; every
+        delivery flies separately</label>
+      <label><input type="radio" name="consolidate" value="safe" checked> Safe
+        &mdash; only parcels as urgent as the one being flown</label>
+      <label><input type="radio" name="consolidate" value="always"> Always
+        &mdash; any parcel on the path, even if it delays an urgent one</label>
+    </div>
+
     <h2>Battery reserve</h2>
     <div class="slider-row">
       <label for="reserve">Reserve</label>

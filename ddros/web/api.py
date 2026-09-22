@@ -93,9 +93,13 @@ def _config_from(payload: dict) -> PlanConfig:
     else:
         fleet_size = None
 
+    consolidate = payload.get("consolidate", "safe")
+    if consolidate not in ("off", "safe", "always"):
+        raise BadRequest("consolidate must be 'off', 'safe' or 'always'", "consolidate")
+
     return PlanConfig(weights=weights, wind=wind, active_zones=zones,
                       algorithm=algorithm, reserve_pct=reserve,
-                      fleet_size=fleet_size)
+                      fleet_size=fleet_size, consolidate=consolidate)
 
 
 def _node_or_400(node_id: str, field: str) -> str:

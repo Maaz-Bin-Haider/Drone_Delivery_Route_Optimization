@@ -51,6 +51,21 @@ class RouteTable:
     def reached(self, source: str, target: str) -> bool:
         return self.cost(source, target) < INF
 
+    def leg_times(self, path: tuple[str, ...] | list[str]) -> list[float]:
+        """Cumulative flight time at each node of a path, in minutes.
+
+        Needed to place an en-route delivery on the clock: a drone crossing a
+        pending destination reaches it partway through its own trip, not at the
+        end of it.
+        """
+        out = [0.0]
+        for u, v in zip(path, path[1:]):
+            edge = next((e for e in self.graph.adj[u] if e.v == v), None)
+            if edge is None:
+                return out + [out[-1]] * (len(path) - len(out))
+            out.append(out[-1] + self.cost_model.edge_time(edge))
+        return out
+
     def charging_reroute(self, source: str, target: str, battery_pct: float,
                          reserve_pct: float = RESERVE_PCT) -> ChargingReroute | None:
         """Best station, resolved entirely from the table in O(C).

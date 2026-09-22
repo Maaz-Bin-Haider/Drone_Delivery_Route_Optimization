@@ -21,6 +21,7 @@
     el.innerHTML =
       tile('Makespan', plan.makespan_min.toFixed(1) + ' min') +
       tile('Delivered', t.delivered) +
+      (t.enroute_drops ? tile('Dropped en route', t.enroute_drops) : '') +
       tile('Unserviceable', t.unserviceable, t.unserviceable > 0) +
       tile('Total distance', t.distance_km.toFixed(1) + ' km') +
       tile('Total energy', t.energy_pct.toFixed(0) + ' %') +
@@ -44,13 +45,15 @@
         const stop = a.charging_stop
           ? ` <span class="pill" style="background:var(--high)">via ${esc(a.charging_stop.station_id)}</span>`
           : '';
-        return `<tr>
+        const rider = a.enroute
+          ? ' <span class="pill enroute">en route</span>' : '';
+        return `<tr${a.enroute ? ' class="rider"' : ''}>
           <td class="mono">${esc(a.delivery_id)}</td>
           <td><span class="pill ${esc(a.priority)}">${esc(a.priority)}</span></td>
           <td>${droneTag(a.drone_id, plan)}</td>
-          <td class="route-cell">${a.route.path.map(esc).join(' &rsaquo; ')}${stop}</td>
-          <td class="num">${a.route.distance_km.toFixed(1)}</td>
-          <td class="num">${a.route.energy_pct.toFixed(1)}%</td>
+          <td class="route-cell">${a.route.path.map(esc).join(' &rsaquo; ')}${stop}${rider}</td>
+          <td class="num">${a.enroute ? '&mdash;' : a.route.distance_km.toFixed(1)}</td>
+          <td class="num">${a.enroute ? '&mdash;' : a.route.energy_pct.toFixed(1) + '%'}</td>
           <td class="num">${a.arrive_min.toFixed(1)}</td>
           <td class="mono">${esc(a.route.algorithm)}</td>
           <td class="why">${esc(a.reason)}</td>

@@ -44,6 +44,7 @@ def build_config(args) -> PlanConfig:
         active_zones=tuple(args.nfz),
         algorithm=args.algorithm,
         fleet_size=getattr(args, "drones", None),
+        consolidate=getattr(args, "consolidate", "safe"),
     )
 
 
@@ -99,6 +100,13 @@ def cmd_plan(args) -> None:
               f"{' '.join(d['packages'])}")
 
     t = result["totals"]
+    if t.get("enroute_drops"):
+        print(f"\n{t['enroute_drops']} parcel(s) dropped en route "
+              f"(no extra flight):")
+        for a in result["assignments"]:
+            if a.get("enroute"):
+                print(f"  {a['delivery_id']} at {a['destination']} by {a['drone_id']} "
+                      f"- {a['reason'][:96]}")
     print(f"\nMakespan {result['makespan_min']:.1f} min   "
           f"total {t['distance_km']:.1f} km / {t['energy_pct']:.1f}% energy   "
           f"delivered {t['delivered']}  unserviceable {t['unserviceable']}")
@@ -305,6 +313,9 @@ def main() -> None:
         p.add_argument("--algorithm", choices=("astar", "dijkstra"), default="astar")
         p.add_argument("--drones", type=int, default=None,
                        help="force a fleet size; omit to choose it automatically")
+        p.add_argument("--consolidate", choices=("off", "safe", "always"),
+                       default="safe",
+                       help="drop parcels on destinations crossed en route")
         return p
 
     p_plan = shared(sub.add_parser("plan", help="plan the delivery batch"))

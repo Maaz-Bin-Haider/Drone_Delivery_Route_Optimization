@@ -36,6 +36,7 @@ class PlanConfig:
     service_min: float = SERVICE_TIME_MIN
     fleet_size: int | None = None            # None selects the size automatically
     fleet_tolerance: float = DEFAULT_TOLERANCE
+    consolidate: str = "safe"                # "off" | "safe" | "always"
 
     def as_dict(self) -> dict:
         return {
@@ -46,6 +47,7 @@ class PlanConfig:
             "reserve_pct": self.reserve_pct,
             "fleet_size": self.fleet_size,
             "fleet_tolerance": self.fleet_tolerance,
+            "consolidate": self.consolidate,
         }
 
 
@@ -142,7 +144,8 @@ class Simulator:
         # faster one (TDD section 9.4).
         sizing = size_fleet(table, self.scenario.drones, deliveries,
                             config.reserve_pct, config.service_min, blocked,
-                            config.fleet_tolerance, config.fleet_size)
+                            config.fleet_tolerance, config.fleet_size,
+                            config.consolidate)
         fleet_plan = sizing.plan
 
         if config.algorithm == "astar":
@@ -160,7 +163,10 @@ class Simulator:
         """
         out = []
         for a in plan.assignments:
-            if a.reroute is not None:
+            if a.reroute is not None or a.enroute:
+                # An en-route drop is a prefix of another flight, not a route in
+                # its own right; recomputing it would compare a shared path
+                # against a standalone one.
                 out.append(a)
                 continue
             source = a.route.path[0]
@@ -178,8 +184,11 @@ class Simulator:
 
     def _render(self, plan: FleetPlan, config: PlanConfig, table: RouteTable,
                 cm: CostModel, sizing: FleetSizing) -> dict:
-        total_distance = sum(a.route.distance_km for a in plan.assignments)
-        total_energy = sum(a.route.energy_pct for a in plan.assignments)
+        # En-route drops share a flight already counted, so including them
+        # would inflate the fleet totals with distance nobody flew.
+        flown = [a for a in plan.assignments if not a.enroute]
+        total_distance = sum(a.route.distance_km for a in flown)
+        total_energy = sum(a.route.energy_pct for a in flown)
         return {
             "scenario": self.scenario.name,
             "config": config.as_dict(),
@@ -188,6 +197,7 @@ class Simulator:
                 "distance_km": round(total_distance, 2),
                 "energy_pct": round(total_energy, 2),
                 "delivered": len(plan.assignments),
+                "enroute_drops": len(plan.assignments) - len(flown),
                 "unserviceable": len(plan.unserviceable),
             },
             "fleet": sizing.as_dict(),

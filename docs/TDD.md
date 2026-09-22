@@ -930,6 +930,84 @@ makespan-minimisation.
 milliseconds, which is why an exhaustive sweep over sizes is affordable rather than needing
 a heuristic of its own.
 
+### 9.6 En-route consolidation  *(FR-7.13 – FR-7.16)*
+
+**The defect.** The assignment of §9.3 plans each delivery as a point-to-point trip from the
+drone's current position, and scores candidates on the endpoint alone. Once a drone is
+committed, the fact that its *path* crosses other pending destinations is discarded. The
+visible symptom is a drone flying directly over a location while a second drone is dispatched
+to that same place:
+
+```
+  D2 flies  L13 > L12 > L15      carrying PKG-006 to L15
+                  ^^^
+                  PKG-017 is waiting here — and D1 was sent on a separate 5.6 km trip for it
+```
+
+This is not a routing error. Both routes are optimal for the pairs they were asked about. The
+loss is in the decomposition: the problem was posed as a sequence of independent shortest-path
+queries, and a fly-over is invisible to that formulation.
+
+**The fix.** After a route is chosen, its intermediate nodes are checked against the pending
+deliveries. Any parcel waiting on that path is handed to the same drone, which drops it in
+passing:
+
+```
+ALGORITHM EnrouteRiders(route, primary, waiting, resolved, policy)
+ 1  if policy = off or |route.path| < 3:  return ∅
+ 2  times ← cumulative flight time at each node of route.path        ▷ O(L)
+ 3  riders ← []
+ 4  for i ← 1 .. |route.path| − 2:                    ▷ intermediate nodes only
+ 5      for each q in waiting[route.path[i]]:
+ 6          if q ∈ resolved:                continue  ▷ already flown, or being flown
+ 7          if policy = safe and q.priority > primary.priority:  continue
+ 8          riders.append(q at times[i] + |riders|·service)
+ 9          resolved ← resolved ∪ {q}
+10          break                                     ▷ one parcel per stop
+11  return riders
+```
+
+Line 6 is the one that matters for correctness. `resolved` holds every request no longer
+pending **by any route** — assigned directly, dropped en route, or ruled unserviceable.
+Tracking only the en-route drops allows a parcel already flown to be picked up a second time,
+which produced a plan delivering the same package twice before it was caught by a test.
+
+**Cost.** A rider adds one service stop and nothing else: the drone flies the identical path,
+so distance and energy are unchanged, and hovering to release a parcel is not modelled
+(assumption A-3). Each stop delays everything behind it on that flight by `SERVICE_TIME_MIN`.
+Complexity is `O(L)` per assignment for a path of `L` nodes, leaving the bound of §9.3
+unchanged.
+
+**Accounting.** An en-route delivery is a *prefix* of another flight, not a journey of its own.
+It is flagged `enroute`, excluded from the fleet distance and energy totals — counting it
+would report distance nobody flew — and skipped by the A* restatement of §11, which would
+otherwise compare a shared path against a standalone route and raise a false admissibility
+violation.
+
+#### 9.6.1 The policy, and why `safe` is the default
+
+Whether a *less urgent* parcel may ride along is a judgement, not a fact, because the stop
+delays the delivery whose flight it is. Three policies are offered and the trade was measured
+on the Peak Load batch rather than assumed:
+
+| Policy | Distance | Energy | Drops | Last urgent arrival |
+|---|---|---|---|---|
+| `off` | 95.0 km | 332.6 % | 0 | 7.3 min |
+| `safe` *(default)* | 93.9 km | 328.8 % | 1 | 7.3 min |
+| `always` | **78.8 km** | **275.9 %** | 2 | **9.3 min** |
+
+`always` is markedly cheaper — 17 % less distance on this batch, and about 3 % across all nine
+demonstration runs — but it pushes the last urgent arrival out by one service stop, and
+because the greedy is not monotone it is **not uniformly better**: one scenario (Peak Load at
+five drones) got *worse* under `always`, at 82.7 km against 78.0. Presenting it as a
+selectable policy with both figures reported is more honest than picking one and calling it
+the answer.
+
+`safe` is the default because a priority queue that can be silently overridden by a routing
+optimisation is not a priority queue. Under `safe`, a routine parcel never delays an urgent
+one; the cost is that some fly-overs remain, which is a deliberate, stated trade rather than
+an oversight.
+
 ---
 
 ## 10. Environment Model
@@ -1246,6 +1324,7 @@ Notation: `V` vertices, `E` edges, `P` deliveries, `D` drones, `C` charging stat
 | All-pairs precomputation | V Dijkstra runs | O(V · (V + E) log V) | O(V²) |
 | Delivery priority queue | Build, then P pops | O(P log P) | O(P) |
 | Greedy assignment | Given the all-pairs table | O(P · D) | O(P + D) |
+| En-route consolidation | Per assignment, path of L nodes | O(L) | O(P) |
 | Fleet sizing | Sweep every roster size N | O(N · (P · N + P log P)) | O(P + N) |
 | **Full planning cycle** | Cold cache | **O(V · (V + E) log V + P · D + P log P)** | O(V² + P + D) |
 | **Full planning cycle** | Warm cache | **O(P · D + P log P)** | O(V² + P + D) |
@@ -1382,6 +1461,7 @@ threshold, since its logic is thin by design.
 | R6 | Floating-point tie-breaking makes results non-deterministic | Medium | Medium | All comparisons use an explicit epsilon; every tie-break falls through to a unique integer or string key *(P5)*. |
 | R7 | Scope creep into unselected extensions | Medium | Medium | §1.2 of the SRS enumerates exclusions explicitly. Dynamic requests and payload capacity are out of scope and are recorded in §21 as future work. |
 | R8 | Demonstration map fails to exhibit the intended phenomena | Medium | Medium | Map properties — a wind-sensitive pair, an energy-vs-distance pair, a zone-blockable route — are asserted by automated tests, not assumed. |
+| R11 | En-route consolidation double-assigns a parcel, delivering it twice | Low | High | Occurred during development and is now pinned by a test across all three policies. Every request is recorded in `resolved` the moment it stops being pending, by whichever route. |
 | R10 | Adding a drone can lengthen the schedule (Graham's anomaly, observed in §9.4) | Confirmed | Medium | Documented and asserted by tests, with a control run showing it survives identical batteries and zero detours — the cause is sequence-dependent travel inside the greedy assignment, not the fleet's battery states. Mitigated in practice by the fleet sizing of §9.5, which evaluates every size and will not select one that a smaller fleet beats. The local-search pass in §21 would remove the underlying cause. |
 | R9 | Pure energy-weighted routing increases *total* batch energy by triggering charging detours (observed, see Experiment 3) | Confirmed | Medium | Documented as a finding rather than suppressed. The dashboard defaults to a balanced weighting; the analysis panel reports the charging-detour count alongside total energy so the coupling is visible rather than surprising. |
 
@@ -1424,6 +1504,7 @@ blank for the team to complete.
 | FR-6 Prioritization | `scheduling/priority_queue.py`, `structures/min_heap.py` | §7.1, §9.1 |
 | FR-7 Fleet assignment | `scheduling/assignment.py` | §9.3 |
 | FR-7.9 Fleet sizing | `scheduling/fleet_sizing.py` | §9.5 |
+| FR-7.13 – FR-7.16 En-route consolidation | `scheduling/assignment.py` | §9.6 |
 | FR-8 No-fly zones | `environment/no_fly.py`, `geo.py` | §10.1 |
 | FR-9 Wind | `environment/wind.py`, `cost/cost_model.py` | §6.1, §10.2 |
 | FR-10 Results presentation | `web/api.py`, `static/js/results.js`, `map.js` | §12.1, §13 |

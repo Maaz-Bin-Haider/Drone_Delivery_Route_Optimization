@@ -64,8 +64,11 @@ def test_service_level_is_filtered_before_speed(table, scenario, customers):
     Selecting on speed alone would pick exactly that plan, so this guards the
     filter in TDD §9.5 line 5 rather than the arithmetic around it.
     """
+    # Consolidation is disabled here on purpose: it lets small fleets finish
+    # batches they otherwise could not, which removes the very condition this
+    # test needs. The guard still has to hold when it is off.
     orders = batch(customers, 18)
-    sizing = size_fleet(table, scenario.drones, orders)
+    sizing = size_fleet(table, scenario.drones, orders, consolidate="off")
     fewest = min(o.unserviceable for o in sizing.options)
     complete = [o for o in sizing.options if o.unserviceable == fewest]
     incomplete = [o for o in sizing.options if o.unserviceable > fewest]

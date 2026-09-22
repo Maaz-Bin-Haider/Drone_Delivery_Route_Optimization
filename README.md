@@ -27,6 +27,8 @@ python run.py plan                             plan the batch and print the sche
 python run.py plan --beta 0.6                  weight the objective toward energy
 python run.py plan --wind 12 --bearing 250     plan under a westerly wind
 python run.py plan --nfz nfz_aerodrome         activate a no-fly zone
+python run.py plan --drones 3                 force a fleet size
+python run.py plan --consolidate always       take every parcel found en route
 python run.py compare DEP L16                  Dijkstra against A* on one pair
 python run.py alternatives L06 L21 --wind 16 --bearing 225
 python run.py queue                            show the dispatch order
@@ -60,6 +62,13 @@ size and launches the smallest one that is as fast as the best — a tenth aircr
 four seconds is not worth the launch. Sizes that fail to complete the batch are excluded on
 service level, never on speed. The panel shows what each size achieved and why one was
 picked, and the size can be forced to demonstrate the difference.
+
+**En-route drops.** A drone whose route crosses another pending destination delivers that
+parcel in passing, for one service stop instead of a whole separate flight. Three policies:
+*off*, *safe* (default — a parcel rides along only if it is at least as urgent as the delivery
+whose flight it shares, so priority is never inverted) and *always*. On the Peak Load batch
+*always* flies 17% less distance but lands the last urgent parcel two minutes later; both
+figures are reported so the trade is visible rather than assumed.
 
 Weight, wind and airspace controls replan live. The plan table gives every delivery its
 route, distance, energy, arrival time and the reason that drone was chosen over the others.
@@ -96,7 +105,7 @@ python -m pytest tests -q
 python -m pytest tests -q --cov=ddros
 ```
 
-192 tests, 93% statement coverage.
+211 tests, 93% statement coverage.
 
 ## Layout
 

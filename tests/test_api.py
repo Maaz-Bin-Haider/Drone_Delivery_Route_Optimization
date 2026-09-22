@@ -247,7 +247,13 @@ def test_the_batch_can_be_cleared_and_rebuilt_by_hand(client):
     client.post("/api/deliveries", json={"destination": "L01", "priority": "NORMAL"})
     plan = client.post("/api/plan", json={}).get_json()
     assert plan["totals"]["delivered"] == 2
+    # The plan is listed in dispatch order, which is what priority governs.
+    # Arrival order can differ: an urgent parcel bound for the far edge of the
+    # map still lands after a routine one next door.
     assert plan["assignments"][0]["priority"] == "URGENT"
+    urgent = next(a for a in plan["assignments"] if a["priority"] == "URGENT")
+    routine = next(a for a in plan["assignments"] if a["priority"] == "NORMAL")
+    assert urgent["depart_min"] <= routine["depart_min"]
 
 
 def test_ids_do_not_collide_after_a_removal(client):

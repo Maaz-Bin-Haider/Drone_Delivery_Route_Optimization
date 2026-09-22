@@ -395,3 +395,12 @@ body.map-expanded .topbar { padding: 8px 20px; }
 }
 .fleet-note .sz.on { border-color: var(--accent); color: var(--accent); font-weight: 700; }
 .fleet-note .sz.bad { color: var(--warn); border-color: var(--warn); }
+
+/* ---- en-route drops ---- */
+.radio-col { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
+.radio-col label { display: flex; align-items: flex-start; gap: 6px; cursor: pointer;
+                   line-height: 1.35; }
+.radio-col input { margin-top: 2px; flex: none; }
+.pill.enroute { background: var(--ok); }
+tbody tr.rider td { background: #f4faf7; }
+tbody tr.rider:hover td { background: #edf6f1; }

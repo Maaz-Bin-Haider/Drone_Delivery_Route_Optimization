@@ -161,6 +161,13 @@ class Assignment:
     battery_before_pct: float
     battery_after_pct: float
     reason: str
+    enroute: bool = False
+    """Dropped during another delivery's flight.
+
+    Such an assignment is a *prefix* of that flight, not a journey of its own:
+    it adds no distance and no energy, and its route must not be recomputed or
+    counted again in the fleet totals.
+    """
 
     def as_dict(self) -> dict:
         return {
@@ -175,6 +182,7 @@ class Assignment:
             "battery_before_pct": round(self.battery_before_pct, 2),
             "battery_after_pct": round(self.battery_after_pct, 2),
             "reason": self.reason,
+            "enroute": self.enroute,
         }
 
 

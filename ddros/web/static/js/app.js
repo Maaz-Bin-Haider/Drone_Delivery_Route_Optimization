@@ -177,6 +177,15 @@
     }
   }
 
+  // Deep links: ?plan=<preset id> loads a demonstration batch and ?t=<minutes>
+  // parks the playback clock at a moment, so a particular point in a run can be
+  // shared, bookmarked or captured rather than described.
+  function deepLink() {
+    const q = new URLSearchParams(window.location.search);
+    const t = q.get('t');
+    return { plan: q.get('plan'), at: t === null ? null : Number(t) };
+  }
+
   async function start() {
     D.map.init();
     try {
@@ -229,7 +238,17 @@
     document.querySelectorAll('.analysis button[data-exp]').forEach(btn =>
       btn.addEventListener('click', () => benchmark(btn.dataset.exp)));
 
-    await plan();
+    const link = deepLink();
+    if (link.plan) {
+      await loadPreset(link.plan);
+      const card = document.querySelector(`.preset-card[data-id="${link.plan}"]`);
+      if (card) card.classList.add('on');
+    } else {
+      await plan();
+    }
+    if (link.at !== null && !Number.isNaN(link.at)) {
+      D.animation.seek(link.at);
+    }
   }
 
   window.addEventListener('DOMContentLoaded', start);

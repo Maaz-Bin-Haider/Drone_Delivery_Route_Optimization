@@ -889,6 +889,15 @@ demonstration scenario it appears directly. Sweeping the roster with its configu
 | 7 | 12 min | 0 | 0 |
 | 8 | 12 min | 0 | 0 |
 
+> **Since measured again.** The figures above predate the improvement pass of §9.6. Once a
+> move is refused when it would delay the finish, the anomaly **disappears from this
+> scenario**: the sweep now reads 85.6, 56.6, 23.5, 20.4, 16.9, 16.9, 16.7, 16.7 minutes,
+> monotone throughout. It is suppressed, not eliminated — each fleet size is planned from its
+> own starting point, so nothing forces the results to be monotone *across* sizes, and a scan
+> of random batches still finds the anomaly in about **3.6%** of adjacent comparisons. Both
+> facts are pinned by tests: one asserts the supplied scenario is monotone, the other pins an
+> instance where it is not.
+
 **The cause is the scheduler, not the fleet's battery states.** An earlier reading of a
 smaller roster attributed the anomaly to battery heterogeneity. A control run refutes that:
 giving every drone an identical full charge — which removes heterogeneity entirely, and
@@ -981,9 +990,26 @@ Planning runs in three phases:
 
 | Phase | What it does | Cost |
 |---|---|---|
-| 1. Greedy | Deliveries in priority order, appended to whichever drone finishes soonest | O(P·D) tour simulations |
-| 2. Improvement | Relocate moves while they shorten total distance | O(K·P·D·S) for K moves |
+| 1. Construction | Two starting points: greedy by earliest completion, and a polar sweep | O(P·D) tour simulations |
+| 2. Improvement | Relocate and 2-opt moves, from each start; the better result wins | O(K·P·D·S) for K moves |
 | 3. Simulation | Fly the finished tours: routes, timings, battery, charging detours | O(P) |
+
+#### 9.6.1a Two constructions
+
+Greedy scores candidates on completion time alone, so it has no reason to keep a drone's work
+in one part of the map: it will hand a drone a delivery on the far side of the city because
+that drone happened to be free. The result is tours that criss-cross — on Morning Round with
+three drones, one tour spanned **188°** of bearing around the depot — and loads that drift
+apart.
+
+The **polar sweep** (Gillett & Miller, 1974) sorts destinations by angle about the depot and
+cuts them into contiguous wedges of equal size. Each drone gets one direction, and the loads
+are balanced by construction. A wedge that exceeds its drone's range spills into the next one
+round the sweep rather than abandoning the construction.
+
+Neither wins outright, so both are polished and the better result is kept. Local search is
+sensitive to where it starts; running it twice costs milliseconds and removes that
+sensitivity.
 
 #### 9.6.2 The improvement pass
 
@@ -1031,6 +1057,35 @@ Four things were wrong in earlier versions, each of which silently defeated the 
   found nothing. Under wind they diverge — the same corridor costs different amounts in each
   direction — so the pass was optimising something the router was not using, and left
   improving moves behind. It now scores the composite cost, whatever weighting is in force.
+
+#### 9.6.2a What a move is judged on
+
+Three objectives are in play and they disagree:
+
+| Judged on | Consequence |
+|---|---|
+| Total distance alone | The cheapest plan piles the batch onto one drone. On Morning Round this turned 34.9 minutes split 5/3/2 into **64.9 minutes split 7/2/1** — fewer kilometres, plainly worse as a service, and the imbalance an operator notices first. |
+| Makespan alone | Always shortened by launching another aircraft for one parcel. On Peak Load this cut the finish from 20.2 to 15.7 minutes while pushing flying from **28.7 km to 56.5**, and scattered the tours again. |
+
+The rule adopted is asymmetric:
+
+* a move that lowers cost is accepted whenever it does not delay the finish;
+* a move that shortens the finish is accepted when it costs at most
+  `BALANCE_COST_TOLERANCE` (2%) more flying.
+
+The second clause is what rebalances an overloaded drone. Balance is not imposed as a quota
+on parcels per drone — the makespan **is** the busiest drone, so relieving it is the first
+thing worth doing, and even loads follow from the objective rather than from a rule about
+fairness. The tolerance bounds how much detour that is worth: at zero, thirty parcels split
+15/9/6 stay that way because rebalancing them costs a little distance.
+
+Measured over the demonstration plans, taken together these changes give:
+
+| Scenario | Before | After |
+|---|---|---|
+| Morning Round, 3 drones | 32.8 km, 34.9 min, 5/3/2, 188° | **31.6 km, 23.5 min, 4/3/3, 116°** |
+| Medical Emergency, 3 drones | 38.8 km, 33.0 min, 3/3/6, 194° | **39.7 km, 29.1 min, 4/4/4, 104°** |
+| Peak Load, 5 drones | 56.8 km, 25.7 min, 135° | **28.7 km, 20.2 min, 4/4/4/4/2, 59°** |
 
 #### 9.6.3 Policy
 
@@ -1174,6 +1229,7 @@ All payloads are `application/json`; the server binds to `127.0.0.1:5000` by def
 |---|---|---|---|
 | `GET` | `/api/scenario` | Current map, fleet, deliveries and zone definitions | FR-1.6, FR-2.4 |
 | `POST` | `/api/plan` | Run a full planning cycle and return the plan, including the fleet-sizing decision | FR-7, FR-7.9, FR-10 |
+| `GET` | `/?plan=<id>&t=<minutes>` | Deep link: load a demonstration plan and park the playback clock at a moment | UI-13 |
 | `POST` | `/api/route` | Single point-to-point route | FR-3 |
 | `POST` | `/api/compare` | Dijkstra vs A* on one pair, with statistics | FR-3.4, FR-11.2 |
 | `POST` | `/api/route/alternatives` | Minimum-distance and minimum-energy routes side by side | FR-4.7 |

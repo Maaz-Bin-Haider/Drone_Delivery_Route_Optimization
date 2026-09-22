@@ -81,6 +81,14 @@ held in reserve, and what every fleet size would have achieved.
 Playback flies the fleet on a shared clock: each drone is drawn as a quadcopter turned to its
 heading, rotors spinning only while airborne, releasing a parcel over each destination.
 
+![The fleet flying the Peak Load round](docs/images/playback.gif)
+
+*Peak Load — eighteen parcels, five drones, 20.2 minutes of simulated flight. Each drone works
+one sector of the city; the ring marks a parcel released.*
+
+A moment in a run can be deep-linked for sharing or capture:
+`?plan=peak_load&t=9.1` loads that batch and parks the clock at 9.1 minutes.
+
 ---
 
 ## Algorithms and data structures
@@ -129,7 +137,7 @@ Reproduce with `python run.py benchmark`.
 | 1 | Does A* actually search less than Dijkstra? | Yes, increasingly so with scale: **52% → 22%** of Dijkstra's expansions from V=10 to V=1000. |
 | 2 | Does runtime match the derived `O((V+E) log V)`? | **R² = 0.992** (Dijkstra), 0.991 (A*). |
 | 3 | Does energy-aware routing save energy? | Per journey yes; **per batch no** when the fleet is near its battery limit. |
-| 4 | What does each extra drone buy? | Superlinear speedup — and makespan is **not monotone**. |
+| 4 | What does each extra drone buy? | Superlinear speedup. Makespan is **not monotone in general**, though the improvement pass removes the anomaly from this scenario. |
 | 5 | How good is the greedy schedule? | **23% above optimal** on average, 66% worst case. |
 | 6 | Is the fast feasibility test safe? | Conservative, never unsafe — but exact search costs only 1.2× more at this scale. |
 | 7 | Do wind and no-fly zones change decisions? | **381 of 561** node pairs are wind-sensitive. |
@@ -149,16 +157,30 @@ corrected away — the contradiction is the result worth reading.
   refusal, never a false promise — but timed fairly, the exact method costs only 1.2× more,
   so the approximation is justified by scale rather than by this scenario.
 
-### No wasteful fly-overs
+### Balanced rounds, no wasteful fly-overs
 
 An earlier version let a drone fly straight over a pending destination while a second drone
-was dispatched to that same place. Each drone's plan is now a **tour**, and a local-search
-pass relocates deliveries — between tours and within one — while doing so lowers total cost.
+was dispatched to that same place — and gave one drone far more parcels than the rest, its
+stops scattered right across the city.
 
-The guarantee is that **when planning finishes, no move would lower the total**. Verified
-across **2,016 planning runs**: every demonstration plan, batches of 20–40 orders with
-distinct and repeated destinations, six wind vectors, four routing weightings, fleet sizes
-2–8, and every no-fly-zone combination. All converged.
+Each drone's plan is now a **tour**. Planning starts from two constructions — greedy by
+earliest completion, and a polar sweep that hands each drone a wedge of the city — and keeps
+whichever polishes better under a local search of relocate and 2-opt moves, applied both
+between tours and within one.
+
+A move is accepted when it shortens the flying without delaying the finish, or shortens the
+finish for at most 2% more flying. Balance follows from that rather than from a quota on
+parcels per drone: the makespan *is* the busiest drone, so relieving it comes first.
+
+| Peak Load, 5 drones | Distance | Makespan | Parcels per drone | Widest tour |
+|---|---|---|---|---|
+| Before | 56.8 km | 25.7 min | — | 135° |
+| After | **28.7 km** | **20.2 min** | **4 / 4 / 4 / 4 / 2** | **59°** |
+
+The guarantee is that **when planning finishes, no move would improve it**. Verified across
+**2,016 planning runs**: every demonstration plan, batches of 20–40 orders with distinct and
+repeated destinations, six wind vectors, four routing weightings, fleet sizes 2–8, and every
+no-fly-zone combination. All converged.
 
 ---
 
@@ -169,7 +191,7 @@ python -m pytest tests -q
 python -m pytest tests -q --cov=ddros
 ```
 
-**277 tests, 94% statement coverage.** Unit, property, integration, contract and architectural
+**276 tests, 94% statement coverage.** Unit, property, integration, contract and architectural
 tests, including admissibility and consistency proofs checked numerically, a determinism
 check, and a convergence audit of the improvement pass under wind.
 

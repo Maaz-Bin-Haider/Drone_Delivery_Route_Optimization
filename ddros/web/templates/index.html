@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DDROS &mdash; Drone Delivery Route Optimization</title>
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="mark"></span>
+    <div>
+      <h1>Drone Delivery Route Optimization</h1>
+      <p class="sub">Scenario: <strong>{{ scenario }}</strong> &middot; Group 02</p>
+    </div>
+  </div>
+  <div class="actions">
+    <span id="status" class="status">ready</span>
+    <button id="btn-plan" class="primary">Replan</button>
+    <button id="btn-csv">Export CSV</button>
+    <button id="btn-json">Export JSON</button>
+  </div>
+</header>
+
+<main class="stage">
+  <section class="map-panel">
+    <div id="map" aria-label="City map with drone routes"></div>
+    <div class="map-overlay" id="legend"></div>
+    <div class="playback">
+      <button id="btn-play" title="Play">&#9654;</button>
+      <button id="btn-pause" title="Pause">&#10074;&#10074;</button>
+      <button id="btn-reset" title="Reset">&#8634;</button>
+      <input type="range" id="clock" min="0" max="100" value="0" step="0.1">
+      <span id="clock-label" class="mono">0.0 min</span>
+    </div>
+    <div class="map-hint">Drag to pan &middot; +/&minus; or Ctrl+wheel to zoom</div>
+    <div id="tile-notice" class="tile-notice" hidden>
+      Map tiles unavailable &mdash; the city graph is drawn without a base map.
+    </div>
+  </section>
+
+  <aside class="controls">
+    <h2>Routing objective</h2>
+    <p class="hint">Weights always sum to 1. Moving one redistributes the rest.</p>
+    <div class="slider-row">
+      <label for="w-alpha">Distance</label>
+      <input type="range" id="w-alpha" min="0" max="100" value="100">
+      <output id="out-alpha" class="mono">1.00</output>
+    </div>
+    <div class="slider-row">
+      <label for="w-beta">Energy</label>
+      <input type="range" id="w-beta" min="0" max="100" value="0">
+      <output id="out-beta" class="mono">0.00</output>
+    </div>
+    <div class="slider-row">
+      <label for="w-gamma">Time</label>
+      <input type="range" id="w-gamma" min="0" max="100" value="0">
+      <output id="out-gamma" class="mono">0.00</output>
+    </div>
+    <div class="presets">
+      <button data-preset="1,0,0">Shortest</button>
+      <button data-preset="0,1,0">Greenest</button>
+      <button data-preset="0.5,0.3,0.2">Balanced</button>
+    </div>
+
+    <h2>Weather</h2>
+    <div class="slider-row">
+      <label for="wind-speed">Wind</label>
+      <input type="range" id="wind-speed" min="0" max="20" value="0" step="0.5">
+      <output id="out-wind" class="mono">0.0 m/s</output>
+    </div>
+    <div class="slider-row">
+      <label for="wind-bearing">Toward</label>
+      <input type="range" id="wind-bearing" min="0" max="350" value="0" step="10">
+      <output id="out-bearing" class="mono">0&deg;</output>
+    </div>
+    <div class="compass" id="compass" aria-hidden="true"><span class="needle"></span></div>
+
+    <h2>Restricted airspace</h2>
+    <div id="zone-list" class="zone-list"></div>
+
+    <h2>Algorithm</h2>
+    <div class="radio-row">
+      <label><input type="radio" name="algo" value="astar" checked> A*</label>
+      <label><input type="radio" name="algo" value="dijkstra"> Dijkstra</label>
+    </div>
+
+    <h2>Battery reserve</h2>
+    <div class="slider-row">
+      <label for="reserve">Reserve</label>
+      <input type="range" id="reserve" min="0" max="40" value="15" step="1">
+      <output id="out-reserve" class="mono">15%</output>
+    </div>
+
+    <h2>Inspect a pair</h2>
+    <div class="pair-row">
+      <select id="pair-from"></select>
+      <span class="arrow">&rarr;</span>
+      <select id="pair-to"></select>
+    </div>
+    <div class="presets">
+      <button id="btn-compare">Compare routers</button>
+      <button id="btn-alts">Shortest vs greenest</button>
+    </div>
+    <div id="pair-result" class="pair-result"></div>
+  </aside>
+</main>
+
+<section class="results">
+  <div class="totals" id="totals"></div>
+  <div class="tables">
+    <div class="table-wrap">
+      <h2>Delivery plan</h2>
+      <table id="plan-table">
+        <thead>
+          <tr>
+            <th>Package</th><th>Priority</th><th>Drone</th><th>Route</th>
+            <th class="num">Distance</th><th class="num">Energy</th>
+            <th class="num">Arrive</th><th>Algorithm</th><th>Why this drone</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <div id="unserviceable"></div>
+    </div>
+    <div class="fleet-wrap">
+      <h2>Fleet</h2>
+      <div id="fleet"></div>
+      <h2>Dispatch queue</h2>
+      <ol id="queue" class="queue"></ol>
+    </div>
+  </div>
+</section>
+
+<section class="analysis">
+  <div class="analysis-head">
+    <h2>Algorithm analysis</h2>
+    <div class="presets">
+      <button data-exp="1">1 &middot; Dijkstra vs A*</button>
+      <button data-exp="2">2 &middot; Growth</button>
+      <button data-exp="4">4 &middot; Fleet value</button>
+      <button data-exp="5">5 &middot; Greedy quality</button>
+      <button data-exp="7">7 &middot; Environment</button>
+      <button data-exp="all" class="primary">Full sweep</button>
+    </div>
+  </div>
+  <div id="charts" class="charts"></div>
+  <div id="findings" class="findings"></div>
+</section>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/map.js') }}"></script>
+<script src="{{ url_for('static', filename='js/animation.js') }}"></script>
+<script src="{{ url_for('static', filename='js/results.js') }}"></script>
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script src="{{ url_for('static', filename='js/controls.js') }}"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

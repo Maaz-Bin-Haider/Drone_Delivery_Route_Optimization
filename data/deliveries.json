@@ -1,0 +1,14 @@
+{
+  "deliveries": [
+    {"id": "PKG-001", "destination": "C2",  "priority": "NORMAL"},
+    {"id": "PKG-002", "destination": "C7",  "priority": "URGENT"},
+    {"id": "PKG-003", "destination": "C5",  "priority": "NORMAL"},
+    {"id": "PKG-004", "destination": "C9",  "priority": "HIGH"},
+    {"id": "PKG-005", "destination": "C4",  "priority": "NORMAL"},
+    {"id": "PKG-006", "destination": "C8",  "priority": "HIGH"},
+    {"id": "PKG-007", "destination": "C10", "priority": "URGENT"},
+    {"id": "PKG-008", "destination": "C1",  "priority": "NORMAL"},
+    {"id": "PKG-009", "destination": "C3",  "priority": "NORMAL"},
+    {"id": "PKG-010", "destination": "C12", "priority": "HIGH"}
+  ]
+}

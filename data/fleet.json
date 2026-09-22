@@ -1,0 +1,7 @@
+{
+  "drones": [
+    {"id": "D1", "current_node": "W", "battery_pct": 90.0},
+    {"id": "D2", "current_node": "W", "battery_pct": 60.0},
+    {"id": "D3", "current_node": "W", "battery_pct": 75.0}
+  ]
+}

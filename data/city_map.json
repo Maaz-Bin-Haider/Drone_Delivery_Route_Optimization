@@ -1,0 +1,381 @@
+{
+  "name": "Northport",
+  "nodes": [
+    {
+      "id": "W",
+      "name": "Central Warehouse",
+      "lat": 24.87,
+      "lon": 66.96,
+      "type": "warehouse"
+    },
+    {
+      "id": "S1",
+      "name": "Northgate Charging",
+      "lat": 24.9,
+      "lon": 67.004,
+      "type": "charging_station"
+    },
+    {
+      "id": "S2",
+      "name": "Eastport Charging",
+      "lat": 24.84,
+      "lon": 67.037,
+      "type": "charging_station"
+    },
+    {
+      "id": "S3",
+      "name": "Old Mill Charging",
+      "lat": 24.84,
+      "lon": 66.982,
+      "type": "charging_station"
+    },
+    {
+      "id": "C1",
+      "name": "Harbour View",
+      "lat": 24.89,
+      "lon": 66.982,
+      "type": "customer"
+    },
+    {
+      "id": "C2",
+      "name": "Cedar Park",
+      "lat": 24.88,
+      "lon": 67.004,
+      "type": "customer"
+    },
+    {
+      "id": "C3",
+      "name": "Kingsway",
+      "lat": 24.89,
+      "lon": 67.026,
+      "type": "customer"
+    },
+    {
+      "id": "C4",
+      "name": "Beacon Hill",
+      "lat": 24.88,
+      "lon": 67.048,
+      "type": "customer"
+    },
+    {
+      "id": "C5",
+      "name": "Riverside",
+      "lat": 24.86,
+      "lon": 67.037,
+      "type": "customer"
+    },
+    {
+      "id": "C6",
+      "name": "Foundry Lane",
+      "lat": 24.85,
+      "lon": 67.015,
+      "type": "customer"
+    },
+    {
+      "id": "C7",
+      "name": "Alder Square",
+      "lat": 24.86,
+      "lon": 66.993,
+      "type": "customer"
+    },
+    {
+      "id": "C8",
+      "name": "Summit Heights",
+      "lat": 24.9,
+      "lon": 67.048,
+      "type": "customer"
+    },
+    {
+      "id": "C9",
+      "name": "Quarry Road",
+      "lat": 24.85,
+      "lon": 66.971,
+      "type": "customer"
+    },
+    {
+      "id": "C10",
+      "name": "Saltworks",
+      "lat": 24.83,
+      "lon": 67.026,
+      "type": "customer"
+    },
+    {
+      "id": "C11",
+      "name": "Lighthouse Point",
+      "lat": 24.9,
+      "lon": 66.96,
+      "type": "customer"
+    },
+    {
+      "id": "C12",
+      "name": "Southfield",
+      "lat": 24.83,
+      "lon": 67.004,
+      "type": "customer"
+    },
+    {
+      "id": "J1",
+      "name": "Junction West",
+      "lat": 24.87,
+      "lon": 66.982,
+      "type": "waypoint"
+    },
+    {
+      "id": "J2",
+      "name": "Junction Mill",
+      "lat": 24.86,
+      "lon": 67.004,
+      "type": "waypoint"
+    },
+    {
+      "id": "J3",
+      "name": "Junction Central",
+      "lat": 24.87,
+      "lon": 67.026,
+      "type": "waypoint"
+    },
+    {
+      "id": "J4",
+      "name": "Junction Park",
+      "lat": 24.88,
+      "lon": 66.993,
+      "type": "waypoint"
+    },
+    {
+      "id": "J5",
+      "name": "Junction North",
+      "lat": 24.89,
+      "lon": 67.015,
+      "type": "waypoint"
+    },
+    {
+      "id": "J6",
+      "name": "Junction East",
+      "lat": 24.88,
+      "lon": 67.037,
+      "type": "waypoint"
+    }
+  ],
+  "edges": [
+    {
+      "u": "C1",
+      "v": "C11"
+    },
+    {
+      "u": "C1",
+      "v": "J1"
+    },
+    {
+      "u": "C1",
+      "v": "J4"
+    },
+    {
+      "u": "C1",
+      "v": "S1"
+    },
+    {
+      "u": "C1",
+      "v": "W"
+    },
+    {
+      "u": "C10",
+      "v": "C12"
+    },
+    {
+      "u": "C10",
+      "v": "C5"
+    },
+    {
+      "u": "C10",
+      "v": "C6"
+    },
+    {
+      "u": "C10",
+      "v": "S2"
+    },
+    {
+      "u": "C11",
+      "v": "J1"
+    },
+    {
+      "u": "C11",
+      "v": "J4"
+    },
+    {
+      "u": "C11",
+      "v": "W"
+    },
+    {
+      "u": "C12",
+      "v": "C6"
+    },
+    {
+      "u": "C12",
+      "v": "J2"
+    },
+    {
+      "u": "C12",
+      "v": "S2"
+    },
+    {
+      "u": "C12",
+      "v": "S3"
+    },
+    {
+      "u": "C2",
+      "v": "J2"
+    },
+    {
+      "u": "C2",
+      "v": "J3"
+    },
+    {
+      "u": "C2",
+      "v": "J4"
+    },
+    {
+      "u": "C2",
+      "v": "J5"
+    },
+    {
+      "u": "C2",
+      "v": "S1"
+    },
+    {
+      "u": "C3",
+      "v": "C4"
+    },
+    {
+      "u": "C3",
+      "v": "C8"
+    },
+    {
+      "u": "C3",
+      "v": "J3"
+    },
+    {
+      "u": "C3",
+      "v": "J5"
+    },
+    {
+      "u": "C3",
+      "v": "J6"
+    },
+    {
+      "u": "C3",
+      "v": "S1"
+    },
+    {
+      "u": "C4",
+      "v": "C8"
+    },
+    {
+      "u": "C4",
+      "v": "J3"
+    },
+    {
+      "u": "C4",
+      "v": "J6"
+    },
+    {
+      "u": "C5",
+      "v": "C6"
+    },
+    {
+      "u": "C5",
+      "v": "J3"
+    },
+    {
+      "u": "C5",
+      "v": "J6"
+    },
+    {
+      "u": "C5",
+      "v": "S2"
+    },
+    {
+      "u": "C6",
+      "v": "C7"
+    },
+    {
+      "u": "C6",
+      "v": "J2"
+    },
+    {
+      "u": "C6",
+      "v": "S2"
+    },
+    {
+      "u": "C7",
+      "v": "C9"
+    },
+    {
+      "u": "C7",
+      "v": "J1"
+    },
+    {
+      "u": "C7",
+      "v": "J2"
+    },
+    {
+      "u": "C7",
+      "v": "J4"
+    },
+    {
+      "u": "C7",
+      "v": "S3"
+    },
+    {
+      "u": "C8",
+      "v": "J5"
+    },
+    {
+      "u": "C8",
+      "v": "J6"
+    },
+    {
+      "u": "C9",
+      "v": "J1"
+    },
+    {
+      "u": "C9",
+      "v": "S3"
+    },
+    {
+      "u": "C9",
+      "v": "W"
+    },
+    {
+      "u": "J1",
+      "v": "J4"
+    },
+    {
+      "u": "J1",
+      "v": "W"
+    },
+    {
+      "u": "J2",
+      "v": "J3"
+    },
+    {
+      "u": "J2",
+      "v": "S3"
+    },
+    {
+      "u": "J2",
+      "v": "W"
+    },
+    {
+      "u": "J3",
+      "v": "J6"
+    },
+    {
+      "u": "J4",
+      "v": "J5"
+    },
+    {
+      "u": "J5",
+      "v": "S1"
+    }
+  ]
+}

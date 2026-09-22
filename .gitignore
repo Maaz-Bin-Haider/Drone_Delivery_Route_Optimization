@@ -1,0 +1,30 @@
+# Byte-compiled / optimised files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*~
+
+# Operating system
+.DS_Store
+Thumbs.db
+
+# Generated output
+benchmark_results.json
+delivery_plan.csv

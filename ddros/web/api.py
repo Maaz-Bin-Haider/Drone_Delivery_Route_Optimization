@@ -81,8 +81,21 @@ def _config_from(payload: dict) -> PlanConfig:
     if not 0.0 <= reserve < 100.0:
         raise BadRequest("reserve_pct must lie in [0, 100)", "reserve_pct")
 
+    roster = len(simulator().scenario.drones)
+    fleet_size = payload.get("fleet_size")
+    if fleet_size not in (None, "", "auto"):
+        try:
+            fleet_size = int(fleet_size)
+        except (TypeError, ValueError):
+            raise BadRequest("fleet_size must be an integer or 'auto'", "fleet_size")
+        if not 1 <= fleet_size <= roster:
+            raise BadRequest(f"fleet_size must lie between 1 and {roster}", "fleet_size")
+    else:
+        fleet_size = None
+
     return PlanConfig(weights=weights, wind=wind, active_zones=zones,
-                      algorithm=algorithm, reserve_pct=reserve)
+                      algorithm=algorithm, reserve_pct=reserve,
+                      fleet_size=fleet_size)
 
 
 def _node_or_400(node_id: str, field: str) -> str:

@@ -45,6 +45,7 @@
       D.animation.build(result);
       D.results.renderTotals(result);
       D.results.renderTable(result);
+      D.results.renderFleetNote(result);
       D.results.renderFleet(result);
       status(`${result.totals.delivered} delivered · ` +
              `${result.makespan_min.toFixed(1)} min`);
@@ -192,6 +193,7 @@
     D.controls.populateZones(scenario.zones, plan);
     D.controls.populatePairs(scenario.nodes);
     D.controls.populateDestinations(scenario.nodes);
+    D.controls.setRosterSize(scenario.drones.length);
     D.controls.wire(plan);
 
     document.getElementById('btn-plan').addEventListener('click', plan);

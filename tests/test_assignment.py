@@ -58,12 +58,8 @@ def test_adding_a_drone_can_lengthen_the_schedule(table, scenario):
 
     List scheduling is not monotone in the number of machines: adding one can
     make the makespan worse, because it changes every subsequent assignment
-    decision. Graham (1969) named this for identical machines; here battery
-    heterogeneity amplifies it, since a drone with less charge may be picked as
-    the earliest finisher for one delivery and then be slow for the rest.
-
-    The test asserts the anomaly exists rather than pretending it does not: a
-    suite that demanded monotonicity would be asserting something false about
+    decision. The test asserts the anomaly exists rather than pretending it does
+    not; a suite demanding monotonicity would be asserting something false about
     greedy scheduling.
     """
     makespans = [
@@ -74,18 +70,29 @@ def test_adding_a_drone_can_lengthen_the_schedule(table, scenario):
         "expected a non-monotone step somewhere in the fleet-size sweep")
 
 
-def test_the_anomaly_is_caused_by_battery_heterogeneity(table, scenario):
-    """Control: with identical full charges the sweep is monotone again.
+def test_the_anomaly_survives_identical_batteries(table, scenario):
+    """The anomaly is the scheduler's, not the fleet's battery states.
 
-    This is what identifies the cause. Without it the anomaly above could be
-    blamed on the routing rather than on the scheduling interacting with state.
+    Giving every drone an identical full charge removes battery heterogeneity
+    entirely, and removes charging detours with it. The anomaly persists, so the
+    cause is the greedy assignment itself: travel times are sequence-dependent,
+    because a delivery's duration depends on where its drone happens to be, and
+    adding a machine changes every subsequent choice.
+
+    Only sizes that serve the whole batch without detours are compared, since a
+    makespan from a plan that delivered less is not comparable.
     """
-    previous = float("inf")
+    rows = []
     for n in range(1, len(scenario.drones) + 1):
         fleet = [Drone(f"D{i + 1}", table.graph.warehouse, 100.0) for i in range(n)]
         plan = assign_fleet(table, fleet, list(scenario.deliveries))
-        assert plan.makespan_min <= previous + 1e-9, f"non-monotone at {n} drones"
-        previous = plan.makespan_min
+        if plan.unserviceable or any(a.reroute for a in plan.assignments):
+            continue
+        rows.append((n, plan.makespan_min))
+
+    assert len(rows) >= 3, "not enough comparable fleet sizes"
+    assert any(b > a + 1e-9 for (_, a), (_, b) in zip(rows, rows[1:])), (
+        "expected the anomaly to persist with identical batteries and no detours")
 
 
 def test_urgent_packages_are_dispatched_first(table, scenario):

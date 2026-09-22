@@ -29,7 +29,9 @@
       active_no_fly_zones: Array.from(
         document.querySelectorAll('#zone-list input:checked')).map(i => i.value),
       algorithm: document.querySelector('input[name=algo]:checked').value,
-      reserve_pct: Number(el('reserve').value)
+      reserve_pct: Number(el('reserve').value),
+      // 0 on the slider means "choose for me"; the API reads null as auto.
+      fleet_size: Number(el('fleet-size').value) || null
     };
   }
 
@@ -41,6 +43,8 @@
     el('out-wind').textContent = Number(el('wind-speed').value).toFixed(1) + ' m/s';
     el('out-bearing').textContent = el('wind-bearing').value + '°';
     el('out-reserve').textContent = el('reserve').value + '%';
+    const fleet = Number(el('fleet-size').value);
+    el('out-fleet').textContent = fleet ? `${fleet} fixed` : 'auto';
     const needle = document.querySelector('#compass .needle');
     if (needle) {
       needle.style.transform =
@@ -69,6 +73,12 @@
     if (far) el('pair-to').value = far.id;
   }
 
+  function setRosterSize(count) {
+    const slider = el('fleet-size');
+    slider.max = count;              // 0 stays "auto", 1..count force a size
+    if (Number(slider.value) > count) slider.value = 0;
+  }
+
   function populateDestinations(nodes) {
     // Customers are the realistic destinations, so they lead; the rest stay
     // available for anyone who wants to route to a pad or a junction.
@@ -95,7 +105,8 @@
 
   function wire(onChange) {
     const deferred = debounce(onChange);
-    ['w-alpha', 'w-beta', 'w-gamma', 'wind-speed', 'wind-bearing', 'reserve']
+    ['w-alpha', 'w-beta', 'w-gamma', 'wind-speed', 'wind-bearing', 'reserve',
+     'fleet-size']
       .forEach(id => el(id).addEventListener('input', function () {
         syncReadouts();
         deferred();                    // one request per drag, not dozens
@@ -115,5 +126,5 @@
   }
 
   D.controls = { config, wire, populateZones, populatePairs,
-                 populateDestinations, syncReadouts, weights };
+                 populateDestinations, setRosterSize, syncReadouts, weights };
 })();

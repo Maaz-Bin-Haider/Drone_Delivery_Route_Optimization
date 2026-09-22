@@ -67,6 +67,23 @@
       : '';
   }
 
+  function renderFleetNote(plan) {
+    const f = plan.fleet;
+    const el = document.getElementById('fleet-note');
+    if (!f || !f.options.length) { el.innerHTML = ''; return; }
+    const sizes = f.options.map(o => {
+      const cls = o.drones === f.chosen ? 'sz on' : (o.unserviceable ? 'sz bad' : 'sz');
+      const mark = o.unserviceable ? '\u2717' : '';
+      return `<span class="${cls}" title="${o.unserviceable} undelivered">` +
+             `${o.drones}: ${o.makespan_min.toFixed(0)}m${mark}</span>`;
+    }).join('');
+    el.innerHTML =
+      `<b>${f.chosen} of ${f.chosen + f.reserve.length} launched</b>` +
+      (f.reserve.length ? ` &middot; reserve ${esc(f.reserve.join(' '))}` : '') +
+      `<span class="why">${esc(f.reason)}</span>` +
+      `<div class="sizes">${sizes}</div>`;
+  }
+
   function renderFleet(plan) {
     document.getElementById('fleet').innerHTML = plan.drones.map((d, i) => {
       const low = d.battery_pct < 30;
@@ -131,6 +148,6 @@
     document.getElementById('pair-result').innerHTML = html;
   }
 
-  D.results = { renderTotals, renderTable, renderFleet, renderQueue,
+  D.results = { renderTotals, renderTable, renderFleet, renderFleetNote, renderQueue,
                 renderOrders, renderPresets, renderPair, esc };
 })();

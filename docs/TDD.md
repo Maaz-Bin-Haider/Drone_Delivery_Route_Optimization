@@ -868,22 +868,67 @@ and §21 notes the local-search improvement that would address it.
 **Observed: Graham's timing anomaly reproduces here.** List scheduling is not monotone in
 the number of machines — adding one can make the makespan *worse*, because it changes every
 subsequent assignment decision. Graham (1969) named this for identical machines; on the
-demonstration scenario it appears directly:
+demonstration scenario it appears directly. Sweeping the roster with its configured charges:
 
-| Drones | Makespan | Charging detours |
-|---|---|---|
-| 1 | 132.3 min | 2 |
-| 2 | **64.0 min** | 2 |
-| 3 | **78.9 min** &nbsp;← worse than two | 1 |
-| 4 | 20.3 min | 0 |
-| 5 | 16.7 min | 0 |
+| Drones | Makespan | Charging detours | Undelivered |
+|---|---|---|---|
+| 1 | 131 min | 2 | 1 |
+| 2 | 107 min | 1 | 0 |
+| 3 | 52 min | 0 | 0 |
+| 4 | 20 min | 0 | 0 |
+| 5 | **17 min** | 0 | 0 |
+| 6 | **18 min** &nbsp;← worse than five | 0 | 0 |
+| 7 | 12 min | 0 | 0 |
+| 8 | 12 min | 0 | 0 |
 
-A control run isolates the cause. Giving every drone a full charge makes the sweep monotone
-again (129.8, 36.6, 32.7, 20.3, 16.7), so the anomaly here is not caused by the routing but
-by **battery heterogeneity interacting with the scheduler**: a drone with less charge can be
-the earliest finisher for one delivery and then be slow for everything after it. Both the
-anomaly and its control are asserted by tests, because a suite demanding monotonicity would
-be asserting something false about greedy scheduling.
+**The cause is the scheduler, not the fleet's battery states.** An earlier reading of a
+smaller roster attributed the anomaly to battery heterogeneity. A control run refutes that:
+giving every drone an identical full charge — which removes heterogeneity entirely, and
+removes charging detours with it — leaves the anomaly intact at exactly the same place.
+
+| Drones (identical full charge) | 3 | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|
+| Makespan | 32.7 | 20.4 | **16.7** | **17.9** ← | 11.9 | 11.9 |
+| Charging detours | 0 | 0 | 0 | 0 | 0 | 0 |
+
+What remains once battery state is held constant is the property that actually produces the
+anomaly: **travel times are sequence-dependent.** A delivery's duration depends on where its
+drone happens to be when it is assigned, so adding one aircraft re-partitions the batch and
+can leave some drone with a materially worse tour. This is the classical anomaly rather than
+anything peculiar to drones, and battery heterogeneity — when present — only adds to it.
+
+Both the anomaly and the identical-battery control are asserted by tests, because a suite
+demanding monotonicity would be asserting something false about greedy scheduling.
+
+### 9.5 Choosing the fleet size  *(FR-7.9)*
+
+The roster is a pool, not a launch order. Since more aircraft are not reliably better, the
+number to dispatch is itself a decision:
+
+```
+ALGORITHM SizeFleet(table, roster, deliveries, tolerance)
+ 1  ordered ← roster sorted by battery descending, then id      ▷ best-charged first
+ 2  for k ← 1 .. |ordered|:
+ 3      plan[k] ← AssignFleet(table, ordered[1..k], deliveries) ▷ O(P·k + P log P)
+ 4  fewest ← min over k of |plan[k].unserviceable|
+ 5  viable ← { k : |plan[k].unserviceable| = fewest }           ▷ service level first
+ 6  best   ← argmin over viable of makespan
+ 7  return min { k ∈ viable : makespan[k] ≤ makespan[best]·(1+tolerance) }
+```
+
+Line 5 matters more than it looks. A fleet too small to finish the batch posts a *shorter*
+makespan simply because it delivered less — one drone "finishes" a nineteen-parcel round in
+40 minutes by abandoning ten of them. Comparing on speed before service level would select
+exactly the worst option, so service level is filtered first and never traded away.
+
+The tolerance (default 3 %) expresses the operator's trade: an aircraft that shaves a few
+seconds off the schedule is not worth launching. Setting it to zero recovers pure
+makespan-minimisation.
+
+**Complexity.** `O(N)` assignments over the cached route table, so
+`O(N·(P·N + P log P))`. For a roster of eight and a batch of twenty this is a few
+milliseconds, which is why an exhaustive sweep over sizes is affordable rather than needing
+a heuristic of its own.
 
 ---
 
@@ -966,7 +1011,7 @@ All payloads are `application/json`; the server binds to `127.0.0.1:5000` by def
 | Method | Endpoint | Purpose | Requirement |
 |---|---|---|---|
 | `GET` | `/api/scenario` | Current map, fleet, deliveries and zone definitions | FR-1.6, FR-2.4 |
-| `POST` | `/api/plan` | Run a full planning cycle and return the plan | FR-7, FR-10 |
+| `POST` | `/api/plan` | Run a full planning cycle and return the plan, including the fleet-sizing decision | FR-7, FR-7.9, FR-10 |
 | `POST` | `/api/route` | Single point-to-point route | FR-3 |
 | `POST` | `/api/compare` | Dijkstra vs A* on one pair, with statistics | FR-3.4, FR-11.2 |
 | `POST` | `/api/route/alternatives` | Minimum-distance and minimum-energy routes side by side | FR-4.7 |
@@ -1146,7 +1191,8 @@ Drone_Delivery/
 │   │   └── constrained.py        # §8.3 two-phase, §8.4 Pareto labels
 │   ├── scheduling/
 │   │   ├── priority_queue.py     # §9.1
-│   │   └── assignment.py         # §9.3 greedy makespan
+│   │   ├── assignment.py         # §9.3 greedy makespan
+│   │   └── fleet_sizing.py       # §9.5 how many drones to launch
 │   ├── simulation/
 │   │   ├── orchestrator.py       # §3.3 planning cycle
 │   │   └── cache.py              # §11
@@ -1200,6 +1246,7 @@ Notation: `V` vertices, `E` edges, `P` deliveries, `D` drones, `C` charging stat
 | All-pairs precomputation | V Dijkstra runs | O(V · (V + E) log V) | O(V²) |
 | Delivery priority queue | Build, then P pops | O(P log P) | O(P) |
 | Greedy assignment | Given the all-pairs table | O(P · D) | O(P + D) |
+| Fleet sizing | Sweep every roster size N | O(N · (P · N + P log P)) | O(P + N) |
 | **Full planning cycle** | Cold cache | **O(V · (V + E) log V + P · D + P log P)** | O(V² + P + D) |
 | **Full planning cycle** | Warm cache | **O(P · D + P log P)** | O(V² + P + D) |
 
@@ -1249,7 +1296,7 @@ Satisfies FR-11 and supplies the "Analysis" half of the coursework.
 | **Hypothesis** | Makespan falls substantially but sub-linearly as drones are added. |
 | **Method** | Plan the same batch with `D ∈ {1, 2, 3, 4, 5}`. Record makespan and per-drone utilisation. |
 | **Output** | Makespan vs D, with the ideal `1/D` curve overlaid to show the gap, plus per-row charging-detour and flight-time columns. Directly quantifies benefit §4.4 of the brief *(FR-11.7)*. |
-| **Observed (anomaly)** | Makespan is **not monotone** in fleet size: on the supplied fleet, three drones are slower than two (78.9 min against 64.0 min). This is Graham's timing anomaly, and §9.4 gives the measurement and the control that identifies battery heterogeneity as its cause. |
+| **Observed (anomaly)** | Makespan is **not monotone** in fleet size: six drones are slower than five (17.9 min against 16.7). This is Graham's timing anomaly, and §9.4 gives the measurement plus a control run showing it survives identical batteries and zero charging detours — so its cause is sequence-dependent travel inside the greedy assignment, not the fleet's battery states. It is the direct motivation for the fleet sizing of §9.5. |
 | **Observed (superlinearity)** | The hypothesis was **wrong in an instructive way**: speedup is *super*-linear — 5.90× from three drones, against an ideal of 3×. This is not parallelism beating its own bound. Two further costs disappear as the fleet grows. One drone cannot carry the batch on a single charge and pays 53.5 minutes across three recharge cycles, which vanish entirely from three drones onward; and a single drone must chain all ten destinations into one sequential tour, spending 124.2 minutes airborne against 49.3 for three drones. The benchmark therefore reports detours and flight time per row, so the parallel speedup is separable from the recharge and tour-length savings rather than conflated with them. |
 
 ### Experiment 5 — Greedy assignment quality
@@ -1335,7 +1382,7 @@ threshold, since its logic is thin by design.
 | R6 | Floating-point tie-breaking makes results non-deterministic | Medium | Medium | All comparisons use an explicit epsilon; every tie-break falls through to a unique integer or string key *(P5)*. |
 | R7 | Scope creep into unselected extensions | Medium | Medium | §1.2 of the SRS enumerates exclusions explicitly. Dynamic requests and payload capacity are out of scope and are recorded in §21 as future work. |
 | R8 | Demonstration map fails to exhibit the intended phenomena | Medium | Medium | Map properties — a wind-sensitive pair, an energy-vs-distance pair, a zone-blockable route — are asserted by automated tests, not assumed. |
-| R10 | Adding a drone can lengthen the schedule (Graham's anomaly, observed in §9.4) | Confirmed | Medium | Documented and asserted by tests, with a control run identifying battery heterogeneity as the cause. The local-search pass in §21 would remove it; until then the analysis panel reports makespan per fleet size so the anomaly is visible rather than surprising. |
+| R10 | Adding a drone can lengthen the schedule (Graham's anomaly, observed in §9.4) | Confirmed | Medium | Documented and asserted by tests, with a control run showing it survives identical batteries and zero detours — the cause is sequence-dependent travel inside the greedy assignment, not the fleet's battery states. Mitigated in practice by the fleet sizing of §9.5, which evaluates every size and will not select one that a smaller fleet beats. The local-search pass in §21 would remove the underlying cause. |
 | R9 | Pure energy-weighted routing increases *total* batch energy by triggering charging detours (observed, see Experiment 3) | Confirmed | Medium | Documented as a finding rather than suppressed. The dashboard defaults to a balanced weighting; the analysis panel reports the charging-detour count alongside total energy so the coupling is visible rather than surprising. |
 
 ---
@@ -1376,6 +1423,7 @@ blank for the team to complete.
 | FR-5 Charging reroute | `algorithms/constrained.py` | §8 |
 | FR-6 Prioritization | `scheduling/priority_queue.py`, `structures/min_heap.py` | §7.1, §9.1 |
 | FR-7 Fleet assignment | `scheduling/assignment.py` | §9.3 |
+| FR-7.9 Fleet sizing | `scheduling/fleet_sizing.py` | §9.5 |
 | FR-8 No-fly zones | `environment/no_fly.py`, `geo.py` | §10.1 |
 | FR-9 Wind | `environment/wind.py`, `cost/cost_model.py` | §6.1, §10.2 |
 | FR-10 Results presentation | `web/api.py`, `static/js/results.js`, `map.js` | §12.1, §13 |

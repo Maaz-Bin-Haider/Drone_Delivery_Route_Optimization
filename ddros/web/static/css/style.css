@@ -350,3 +350,48 @@ body.map-expanded .topbar { padding: 8px 20px; }
 @media (max-width: 1100px) {
   #map { height: clamp(420px, 62vh, 700px); }
 }
+
+/* ---- parcel release on delivery ---- */
+.drop-marker { background: transparent; border: 0; pointer-events: none; }
+.drop-marker .ring {
+  position: absolute; left: 50%; top: 50%; width: 22px; height: 22px;
+  margin: -11px 0 0 -11px; border-radius: 50%; border: 2.5px solid;
+  animation: drop-ring 1.4s cubic-bezier(.2,.7,.3,1) forwards;
+}
+.drop-marker .parcel {
+  position: absolute; left: 50%; top: 50%; margin: -10px 0 0 -10px;
+  filter: drop-shadow(0 2px 3px rgba(0,0,0,0.3));
+  animation: parcel-fall 1.4s cubic-bezier(.35,.05,.35,1) forwards;
+}
+@keyframes parcel-fall {
+  0%   { transform: translateY(-34px) scale(.7); opacity: 0; }
+  18%  { opacity: 1; }
+  55%  { transform: translateY(0) scale(1); opacity: 1; }
+  66%  { transform: translateY(-5px) scale(1.06); }
+  78%  { transform: translateY(0) scale(1); }
+  100% { transform: translateY(0) scale(.92); opacity: 0; }
+}
+@keyframes drop-ring {
+  0%   { transform: scale(.25); opacity: .9; }
+  70%  { opacity: .35; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .drop-marker { display: none; }
+}
+
+/* ---- fleet sizing readout ---- */
+.fleet-note {
+  background: #f2f8fc; border: 1px solid var(--line); border-left: 3px solid var(--accent);
+  border-radius: 8px; padding: 9px 12px; font-size: 12px; margin-bottom: 10px;
+}
+.fleet-note b { font-size: 13px; }
+.fleet-note .why { color: var(--muted); margin-top: 3px; display: block; }
+.fleet-note .sizes { margin-top: 7px; display: flex; flex-wrap: wrap; gap: 5px; }
+.fleet-note .sz {
+  font-family: var(--mono); font-size: 11px; padding: 2px 7px; line-height: 1.5;
+  border: 1px solid var(--line); border-radius: 5px; background: var(--panel);
+  white-space: nowrap;
+}
+.fleet-note .sz.on { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+.fleet-note .sz.bad { color: var(--warn); border-color: var(--warn); }

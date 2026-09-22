@@ -8,6 +8,8 @@
   const D = window.DDROS || (window.DDROS = {});
 
   let timeline = {};
+  let events = [];
+  const delivered = new Set();
   let horizon = 0;
   let clock = 0;
   let playing = false;
@@ -17,8 +19,13 @@
 
   function build(plan) {
     timeline = {};
+    events = [];
     horizon = plan.makespan_min || 0;
     plan.assignments.forEach(a => {
+      events.push({
+        id: a.delivery_id, node: a.destination, at: a.arrive_min,
+        drone: a.drone_id
+      });
       const pts = a.route.path.map(D.map.latlng).filter(Boolean);
       if (pts.length < 2) return;
       (timeline[a.drone_id] || (timeline[a.drone_id] = [])).push({
@@ -97,7 +104,24 @@
     return out;
   }
 
-  function render() {
+  function syncDeliveries(animate) {
+    // Crossing an arrival time forward releases the parcel. Scrubbing backwards
+    // re-arms it, so the same delivery animates again on the next pass rather
+    // than only ever once.
+    events.forEach(e => {
+      if (clock >= e.at) {
+        if (!delivered.has(e.id)) {
+          delivered.add(e.id);
+          if (animate) D.map.dropPackage(e.node, D.map.colorFor(e.drone));
+        }
+      } else {
+        delivered.delete(e.id);
+      }
+    });
+  }
+
+  function render(animate) {
+    syncDeliveries(animate === true);
     D.map.setDronePositions(positionsAt(clock));
     const slider = document.getElementById('clock');
     const label = document.getElementById('clock-label');
@@ -111,7 +135,7 @@
     lastFrame = now;
     clock += dt * SPEED;
     if (clock >= horizon) { clock = horizon; playing = false; }
-    render();
+    render(true);                       // only playback releases parcels
     if (playing) raf = requestAnimationFrame(frame);
   }
 
@@ -131,13 +155,18 @@
   function reset() {
     pause();
     clock = 0;
-    render();
+    delivered.clear();
+    D.map.clearDrops();
+    render(false);
   }
 
   function seek(value) {
+    // A scrub can jump past many arrivals at once; firing them all together
+    // would be a burst of confetti rather than a delivery. Sync silently.
     pause();
     clock = Math.max(0, Math.min(horizon, Number(value) || 0));
-    render();
+    D.map.clearDrops();
+    render(false);
   }
 
   D.animation = { build, play, pause, reset, seek };

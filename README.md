@@ -3,8 +3,8 @@
 **Group 02 — Design & Analysis of Algorithms**
 
 A simulation that plans, prioritizes and assigns unmanned package deliveries across
-**Kestrel Bay**, a fictional coastal city of 34 named locations served by a fleet of five
-drones. It automates four decisions a human dispatcher would otherwise make by hand: which
+**Kestrel Bay**, a fictional coastal city of 34 named locations served by a roster of eight
+drones, of which it decides how many to actually launch. It automates four decisions a human dispatcher would otherwise make by hand: which
 delivery goes next, which drone takes it, which route that drone flies, and whether the route
 is energy-feasible.
 
@@ -55,10 +55,17 @@ under colour-vision deficiency and on a projector.
 You can also clear the batch and build one by hand, choosing each destination by name and
 district and setting its priority, or remove individual orders.
 
+**Fleet sizing.** The roster is a pool, not a launch order. The system plans at every fleet
+size and launches the smallest one that is as fast as the best — a tenth aircraft that saves
+four seconds is not worth the launch. Sizes that fail to complete the batch are excluded on
+service level, never on speed. The panel shows what each size achieved and why one was
+picked, and the size can be forced to demonstrate the difference.
+
 Weight, wind and airspace controls replan live. The plan table gives every delivery its
 route, distance, energy, arrival time and the reason that drone was chosen over the others.
 Playback flies the fleet on a shared clock: each drone is drawn as a quadcopter turned to its
-heading, rotors spinning only while it is actually airborne.
+heading, rotors spinning only while it is actually airborne, and each delivery releases a
+parcel over its destination.
 
 ## Experiments
 
@@ -70,16 +77,17 @@ Headline results, reproducible with `python run.py benchmark`:
 | 1 | Does A* actually search less than Dijkstra? | Yes, and increasingly so with scale: 52% of Dijkstra's expansions at V=10, 21.7% at V=1000. |
 | 2 | Does runtime match the derived `O((V+E) log V)`? | R² = 0.992 (Dijkstra), 0.991 (A*). |
 | 3 | Does energy-aware routing save energy? | Per journey yes; per batch **no** when the fleet is near its battery limit — slower routes trigger charging detours. |
-| 4 | What does each extra drone buy? | Superlinear speedup — and makespan is **not monotone**: three drones are slower than two. |
+| 4 | What does each extra drone buy? | Superlinear speedup — and makespan is **not monotone**: six drones are slower than five. |
 | 5 | How good is the greedy schedule? | 23% above optimal on average, 66% worst case. |
 | 6 | Is the fast feasibility test safe? | Conservative, never unsafe — but exact search costs only 1.2× more at this scale. |
 | 7 | Do wind and no-fly zones change decisions? | 381 of 561 node pairs are wind-sensitive. |
 
 Experiments 3, 4 and 6 each contradicted their own starting hypothesis, and the fleet sweep
 reproduces **Graham's timing anomaly** — adding a drone can lengthen the schedule. A control
-run with identical charges restores monotonicity, identifying battery heterogeneity as the
-cause. All of it is reported in [TDD §16](docs/TDD.md) and §9.4 as observed, not corrected
-away.
+run with identical batteries and no charging detours shows the anomaly survives, so its cause
+is sequence-dependent travel inside the greedy assignment rather than the fleet's battery
+states. That is why the system chooses its fleet size rather than launching everything. All
+of it is reported in [TDD §16](docs/TDD.md) and §9.4 as observed, not corrected away.
 
 ## Tests
 
@@ -88,7 +96,7 @@ python -m pytest tests -q
 python -m pytest tests -q --cov=ddros
 ```
 
-176 tests, 93% statement coverage.
+192 tests, 93% statement coverage.
 
 ## Layout
 
@@ -101,7 +109,7 @@ ddros/
   cost/             composite distance/energy/time cost model
   environment/      wind field and no-fly zones
   algorithms/       Dijkstra, A*, heuristics, energy-constrained routing
-  scheduling/       delivery priority queue, greedy fleet assignment
+  scheduling/       priority queue, greedy assignment, fleet sizing
   simulation/       planning orchestrator, all-pairs route cache
   analysis/         search instrumentation and benchmarking
 data/               city map and backdrop, fleet, batch, demo plans, no-fly zones

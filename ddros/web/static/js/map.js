@@ -50,6 +50,7 @@
       zones:  L.layerGroup().addTo(map),
       routes: L.layerGroup().addTo(map),
       nodes:  L.layerGroup().addTo(map),
+      drops:  L.layerGroup().addTo(map),
       drones: L.layerGroup().addTo(map)
     };
     return map;
@@ -267,8 +268,37 @@
 
   function clearDrones() { layers.drones.clearLayers(); }
 
+  const REDUCED_MOTION =
+    window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const DROP_MS = 1500;
+
+  function dropPackage(nodeId, color) {
+    // A parcel released over the destination, with a ring marking the delivery.
+    // The marker removes itself once the animation is done, so nothing
+    // accumulates over a long playback.
+    const at = latlng(nodeId);
+    if (!at || REDUCED_MOTION) return;
+    const marker = L.marker(at, {
+      interactive: false, zIndexOffset: 900,
+      icon: L.divIcon({
+        className: 'drop-marker',
+        html: `<span class="ring" style="border-color:${color}"></span>
+               <svg class="parcel" viewBox="0 0 20 20" width="20" height="20">
+                 <rect x="2.5" y="5" width="15" height="12" rx="2"
+                       fill="${color}" stroke="#ffffff" stroke-width="1.4"/>
+                 <path d="M10 5 V17" stroke="#ffffff" stroke-width="1.4"/>
+                 <path d="M2.5 9.5 H17.5" stroke="#ffffff" stroke-width="1.4"/>
+               </svg>`,
+        iconSize: [46, 46], iconAnchor: [23, 23]
+      })
+    }).addTo(layers.drops);
+    setTimeout(() => layers.drops.removeLayer(marker), DROP_MS);
+  }
+
+  function clearDrops() { layers.drops.clearLayers(); }
+
   D.map = { init, drawScenario, drawBackdrop, drawZones, drawPlan, latlng,
-            refit: () => refit(),
+            refit: () => refit(), dropPackage, clearDrops,
             colorFor, setDronePositions, clearDrones,
             nodes: () => nodesById };
 })();

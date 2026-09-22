@@ -274,5 +274,6 @@ def test_every_location_names_its_district(client):
     assert all(n["district"] for n in nodes)
 
 
-def test_the_fleet_has_five_drones(client):
-    assert len(client.get("/api/scenario").get_json()["drones"]) == 5
+def test_the_roster_is_larger_than_any_batch_needs(client):
+    """The roster is a pool to select from, not a launch order (FR-7.9)."""
+    assert len(client.get("/api/scenario").get_json()["drones"]) >= 8

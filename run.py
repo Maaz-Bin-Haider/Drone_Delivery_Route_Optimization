@@ -43,6 +43,7 @@ def build_config(args) -> PlanConfig:
         wind=Wind(args.wind, args.bearing),
         active_zones=tuple(args.nfz),
         algorithm=args.algorithm,
+        fleet_size=getattr(args, "drones", None),
     )
 
 
@@ -82,7 +83,15 @@ def cmd_plan(args) -> None:
         for u in result["unserviceable"]:
             print(f"  {u['delivery_id']} -> {u['destination']}: {u['reason']}")
 
-    print("\nFLEET")
+    f = result["fleet"]
+    print(f"\nFLEET  {f['chosen']} of {f['chosen'] + len(f['reserve'])} dispatched"
+          + (f"  (reserve: {' '.join(f['reserve'])})" if f["reserve"] else ""))
+    print(f"  {f['reason']}")
+    if len(f["options"]) > 1:
+        print("  " + "  ".join(
+            f"{o['drones']}:{o['makespan_min']:.0f}m"
+            + ("*" if o["unserviceable"] else "")
+            for o in f["options"]) + "    (* leaves orders undelivered)")
     for d in result["drones"]:
         print(f"  {d['id']}  {d['deliveries']} deliveries  "
               f"{d['distance_km']:>5.1f} km  battery {d['battery_pct']:>5.1f}%  "
@@ -294,6 +303,8 @@ def main() -> None:
         p.add_argument("--nfz", action="append", default=[],
                        help="activate a no-fly zone by id (repeatable)")
         p.add_argument("--algorithm", choices=("astar", "dijkstra"), default="astar")
+        p.add_argument("--drones", type=int, default=None,
+                       help="force a fleet size; omit to choose it automatically")
         return p
 
     p_plan = shared(sub.add_parser("plan", help="plan the delivery batch"))

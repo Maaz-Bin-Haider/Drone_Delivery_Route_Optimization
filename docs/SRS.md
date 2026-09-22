@@ -3,7 +3,7 @@
 ## Drone Delivery Route Optimization System
 
 **Course:** Design & Analysis of Algorithms (DAA)
-**Document version:** 1.1
+**Document version:** 1.2
 **Date:** 22 September 2026
 **Prepared in accordance with:** IEEE Std 830-1998, *IEEE Recommended Practice for Software Requirements Specifications*
 
@@ -33,6 +33,7 @@
 |---|---|---|
 | 1.0 | 22 Sep 2026 | Initial specification derived from the approved project brief |
 | 1.1 | 22 Sep 2026 | Fictional city of Kestrel Bay (34 locations); fleet raised to five; operator-composed batches and prepared demonstration plans added |
+| 1.2 | 22 Sep 2026 | Roster of eight with automatic fleet sizing; parcel-release animation on delivery; map sizing requirements |
 
 ---
 
@@ -243,7 +244,7 @@ present an unexplained result.
 | A-2 | Drones fly at a constant nominal airspeed; acceleration, climb and descent profiles are not modelled. |
 | A-3 | Energy consumption is proportional to distance flown, scaled by a wind factor. Payload mass, temperature and battery age are not modelled. |
 | A-4 | Wind is uniform across the entire map and constant during a planning cycle. |
-| A-5 | All drones in the fleet are homogeneous in speed and battery capacity, differing only in current state of charge and position. The supplied fleet of five drones starts at differing charges, which is what exposes the scheduling anomaly recorded in TDD §9.4. |
+| A-5 | All drones in the fleet are homogeneous in speed and battery capacity, differing only in current state of charge and position. The supplied roster of eight drones starts at differing charges; the scheduling anomaly recorded in TDD §9.4 is present with or without that heterogeneity. |
 | A-6 | Charging stations are always available; queuing for a charger is not modelled. |
 | A-7 | Delivery service time at the destination is a fixed constant, identical for all packages. |
 | A-8 | The complete delivery batch is known before planning begins. |
@@ -285,6 +286,9 @@ present an unexplained result.
 | UI-13 | The control panel **shall** present the prepared demonstration plans with their names, descriptions and order counts, and loading one **shall** replan immediately. |
 | UI-14 | The control panel **shall** provide an order manager listing the current batch, with a control to remove any single order, a control to clear the batch, and a form to add an order by destination and priority. Destinations **shall** be offered by name and district, not by identifier. |
 | UI-15 | A wheel gesture over the map **shall** scroll the page rather than zoom the map, so the reader is never trapped above the results. Zoom **shall** remain available by explicit control. |
+| UI-16 | The control panel **shall** offer a fleet-size control with an automatic setting and a forced setting for any size within the roster, and the results **shall** show which sizes were evaluated, what each achieved and why one was chosen *(FR-7.9, FR-7.11, FR-7.12)*. |
+| UI-17 | On delivery, the map **shall** show the parcel being released at the destination. The effect **shall** play only during playback, **shall not** replay in bulk when the clock is scrubbed, and **shall** be suppressed under a reduced-motion preference. |
+| UI-18 | The map **shall** occupy as much of the viewport height as the surrounding controls allow, and **shall** offer a mode in which it fills the viewport entirely. |
 
 #### 3.1.2 Hardware Interfaces
 
@@ -421,6 +425,10 @@ section of the originating project brief that mandates it.
 | FR-7.6 | Where no drone in the fleet is eligible, the delivery **shall** be marked UNSERVICEABLE and reported with the reason. | Must |
 | FR-7.7 | The system **shall** report per-drone utilisation: deliveries assigned, distance flown, energy consumed and idle time. | Must |
 | FR-7.8 | The system **shall** report the makespan of the resulting schedule, and **should** contrast it with the single-drone baseline to quantify the benefit of the fleet. | Must / Should |
+| FR-7.9 | The fleet **shall** be treated as a roster rather than a launch order. The system **shall** select how many drones to dispatch, evaluating every size and choosing the smallest that comes within a configurable tolerance of the best achievable makespan. Drones not dispatched **shall** be reported as reserve. | Must |
+| FR-7.10 | Fleet sizes **shall** be compared on service level before speed. A fleet too small to complete the batch posts a shorter makespan only because it delivered less, and **shall not** be selected on that basis. | Must |
+| FR-7.11 | The operator **shall** be able to override the selected size and force any size within the roster, so the effect of the choice can be demonstrated. | Must |
+| FR-7.12 | The system **shall** report which sizes were evaluated, what each achieved, and why the chosen one was selected. | Must |
 
 ---
 
@@ -555,7 +563,7 @@ section of the originating project brief that mandates it.
 | §2.3 | Find the best route | FR-3.1 – FR-3.8 |
 | §2.4 | Consider battery / energy usage | FR-4.1 – FR-4.8, FR-5.1 – FR-5.7 |
 | §2.5 | Prioritize deliveries | FR-6.1 – FR-6.6 |
-| §2.6 | Divide work between multiple drones | FR-7.1 – FR-7.8 |
+| §2.6 | Divide work between multiple drones | FR-7.1 – FR-7.12 |
 | §2.7 | Show selected route and delivery information | FR-10.1 – FR-10.7, UI-1 – UI-15 |
 | §3 | Algorithms and data structures used | FR-1.5, FR-3.1, FR-3.2, FR-6.1, FR-7.2, NFR-6 |
 | §4 | Main benefits of the project | FR-7.8, FR-11.7 (quantified evidence for the claimed benefits) |

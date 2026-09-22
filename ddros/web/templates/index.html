@@ -107,6 +107,15 @@
       <label><input type="radio" name="algo" value="dijkstra"> Dijkstra</label>
     </div>
 
+    <h2>Fleet</h2>
+    <p class="hint">How many aircraft to launch. On auto the system picks the
+      smallest fleet that is as fast as the best one.</p>
+    <div class="slider-row">
+      <label for="fleet-size">Drones</label>
+      <input type="range" id="fleet-size" min="0" max="8" value="0" step="1">
+      <output id="out-fleet" class="mono">auto</output>
+    </div>
+
     <h2>Battery reserve</h2>
     <div class="slider-row">
       <label for="reserve">Reserve</label>
@@ -147,6 +156,7 @@
     </div>
     <div class="fleet-wrap">
       <h2>Fleet</h2>
+      <div id="fleet-note"></div>
       <div id="fleet"></div>
       <h2>Dispatch queue</h2>
       <ol id="queue" class="queue"></ol>

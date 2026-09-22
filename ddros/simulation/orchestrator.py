@@ -17,7 +17,8 @@ from ..domain.loader import Scenario
 from ..domain.models import Route
 from ..environment.no_fly import NoFlyMask
 from ..environment.wind import CALM, Wind
-from ..scheduling.assignment import FleetPlan, assign_fleet
+from ..scheduling.assignment import FleetPlan
+from ..scheduling.fleet_sizing import DEFAULT_TOLERANCE, FleetSizing, size_fleet
 from .cache import ConfigCache, RouteTable
 
 _COST_EQUALITY_TOLERANCE = 1e-9
@@ -33,6 +34,8 @@ class PlanConfig:
     algorithm: str = "astar"
     reserve_pct: float = RESERVE_PCT
     service_min: float = SERVICE_TIME_MIN
+    fleet_size: int | None = None            # None selects the size automatically
+    fleet_tolerance: float = DEFAULT_TOLERANCE
 
     def as_dict(self) -> dict:
         return {
@@ -41,6 +44,8 @@ class PlanConfig:
             "active_no_fly_zones": list(self.active_zones),
             "algorithm": self.algorithm,
             "reserve_pct": self.reserve_pct,
+            "fleet_size": self.fleet_size,
+            "fleet_tolerance": self.fleet_tolerance,
         }
 
 
@@ -132,13 +137,18 @@ class Simulator:
         } if cm.mask else {}
 
         deliveries = _fresh(self.scenario.deliveries)
-        fleet_plan = assign_fleet(table, self.scenario.drones, deliveries,
-                                  config.reserve_pct, config.service_min, blocked)
+        # The roster is not a launch order: how many aircraft to dispatch is
+        # itself a decision, and on this problem a larger fleet is not always a
+        # faster one (TDD section 9.4).
+        sizing = size_fleet(table, self.scenario.drones, deliveries,
+                            config.reserve_pct, config.service_min, blocked,
+                            config.fleet_tolerance, config.fleet_size)
+        fleet_plan = sizing.plan
 
         if config.algorithm == "astar":
             fleet_plan = self._restate_with_astar(fleet_plan, cm)
 
-        return self._render(fleet_plan, config, table, cm)
+        return self._render(fleet_plan, config, table, cm, sizing)
 
     def _restate_with_astar(self, plan: FleetPlan, cm: CostModel) -> FleetPlan:
         """Recompute each direct route with A* and verify it matches Dijkstra.
@@ -166,8 +176,8 @@ class Simulator:
             out.append(replace(a, route=alt))
         return FleetPlan(out, plan.unserviceable, plan.drones)
 
-    def _render(self, plan: FleetPlan, config: PlanConfig,
-                table: RouteTable, cm: CostModel) -> dict:
+    def _render(self, plan: FleetPlan, config: PlanConfig, table: RouteTable,
+                cm: CostModel, sizing: FleetSizing) -> dict:
         total_distance = sum(a.route.distance_km for a in plan.assignments)
         total_energy = sum(a.route.energy_pct for a in plan.assignments)
         return {
@@ -180,6 +190,7 @@ class Simulator:
                 "delivered": len(plan.assignments),
                 "unserviceable": len(plan.unserviceable),
             },
+            "fleet": sizing.as_dict(),
             "assignments": [a.as_dict() for a in plan.assignments],
             "unserviceable": [u.as_dict() for u in plan.unserviceable],
             "drones": [

@@ -69,11 +69,14 @@ a tour, and an improvement pass relocates deliveries between tours while doing s
 total flight distance. Three policies: *off*, *safe* (default — a move may not reorder urgency
 within a tour) and *always*.
 
-The guarantee is that **when planning finishes, no delivery could be moved to another drone in
-a way that shortens the total**. Verified across 1,120 planning runs covering every
-demonstration plan, all 22 customer locations, batches of 20–40 orders with distinct and
-repeated destinations, fleet sizes 2–8, and every no-fly-zone combination. See
-[TDD §9.6](docs/TDD.md).
+The pass also reorders each drone's own stops, so a tour never crosses the map to a far
+customer and comes back for a near one it flew past.
+
+The guarantee is that **when planning finishes, no move would lower the total cost** — of a
+delivery to another drone, of a stop to another place in its own tour, or of a reversed run of
+stops. Verified across 2,016 planning runs covering every demonstration plan, batches of 20–40
+orders with distinct and repeated destinations, **six wind vectors**, **four routing
+weightings**, fleet sizes 2–8, and every no-fly-zone combination. See [TDD §9.6](docs/TDD.md).
 
 Weight, wind and airspace controls replan live. The plan table gives every delivery its
 route, distance, energy, arrival time and the reason that drone was chosen over the others.
@@ -110,7 +113,7 @@ python -m pytest tests -q
 python -m pytest tests -q --cov=ddros
 ```
 
-250 tests, 93% statement coverage.
+276 tests, 93% statement coverage.
 
 ## Layout
 

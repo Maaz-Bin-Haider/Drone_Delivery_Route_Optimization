@@ -107,9 +107,11 @@ def test_each_tour_is_flown_in_priority_order(table, scenario):
     for drone in plan.drones:
         legs = sorted((a for a in plan.assignments if a.drone_id == drone.id),
                       key=lambda a: a.depart_min)
-        priorities = [a.priority for a in legs]
-        assert priorities == sorted(priorities), (
-            f"{drone.id} flies {[p.name for p in priorities]} out of order")
+        for index, leg in enumerate(legs):
+            if leg.enroute:
+                continue          # a free stop delays nothing but by a handover
+            assert not any(x.priority < leg.priority for x in legs[index + 1:]), (
+                f"{drone.id} detours to {leg.destination} ahead of more urgent work")
 
 
 def test_blocked_destination_is_reported_with_its_cause(table, scenario):

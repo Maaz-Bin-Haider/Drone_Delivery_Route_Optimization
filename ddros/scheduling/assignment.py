@@ -91,6 +91,15 @@ class _TourResult:
     legs: list[_Leg] = field(default_factory=list)
     finish_min: float = 0.0
     distance_km: float = 0.0
+    cost: float = 0.0
+    """Total composite cost: what the router actually minimises.
+
+    The improvement pass scores moves on this rather than on raw distance.
+    Under pure-distance weighting the two coincide, but once energy or time
+    carries weight -- or a wind makes the same corridor cost different amounts
+    in each direction -- optimising distance while routing by cost leaves the
+    pass working against the objective the operator selected.
+    """
     energy_pct: float = 0.0
     end_node: str = ""
     end_battery: float = 0.0
@@ -155,6 +164,7 @@ def simulate_tour(table: RouteTable, drone: Drone, stops: list[DeliveryRequest],
         result.legs.append(_Leg(request, route, reroute, depart, arrive,
                                 before, battery, free))
         result.distance_km += route.distance_km
+        result.cost += route.cost
         result.energy_pct += route.energy_pct
         clock = arrive + service_min
         position = request.destination
@@ -170,12 +180,28 @@ def simulate_tour(table: RouteTable, drone: Drone, stops: list[DeliveryRequest],
 # phase 2 -- relocate moves
 # --------------------------------------------------------------------------
 
-def _priority_ok(stops: list[DeliveryRequest], index: int,
-                 request: DeliveryRequest) -> bool:
-    """Would inserting `request` at `index` put routine work ahead of urgent work?"""
-    before = stops[index - 1].priority if index > 0 else Priority.URGENT
-    after = stops[index].priority if index < len(stops) else Priority.NORMAL
-    return before <= request.priority <= after
+def safe_ordering(result: _TourResult) -> bool:
+    """Does this tour respect priority in the way that actually matters?
+
+    The obvious reading -- "a tour must be sorted urgent-first" -- is too
+    strict, and produces the behaviour it is meant to prevent. A drone carrying
+    an urgent parcel to the far side of the map is forced to fly *past* a
+    routine delivery standing directly on its path, deliver the urgent one, and
+    come back. Nobody is better off: the urgent parcel arrives no sooner, and
+    the fleet flies a pointless detour.
+
+    What matters is that urgent work is never delayed by a **detour**. So a less
+    urgent stop may precede a more urgent one only when it costs no detour --
+    when the drone was flying through that point anyway and pays only the
+    service stop. That is the `free` flag computed while flying the tour.
+    """
+    for index, leg in enumerate(result.legs):
+        if leg.free:
+            continue                  # costs nothing but the handover
+        if any(later.request.priority < leg.request.priority
+               for later in result.legs[index + 1:]):
+            return False              # a detour ahead of more urgent work
+    return True
 
 
 def improve_tours(table: RouteTable, fleet: list[Drone],
@@ -202,13 +228,15 @@ def improve_tours(table: RouteTable, fleet: list[Drone],
     moves = 0
     saved = 0.0
 
-    # First-improvement local search: take the first relocation that shortens
-    # the total flight distance and restart, rather than scanning for the very
-    # best one each time. It converges in far fewer simulations and reaches the
-    # same fixpoint -- no improving move is left when the loop ends.
+    # First-improvement local search: take the first move that lowers the total
+    # and restart, rather than scanning for the very best one each time. It
+    # converges in far fewer simulations and reaches the same fixpoint -- the
+    # loop only ends when no improving move exists at all.
     improving = True
     while improving and moves < budget:
         improving = False
+
+        # --- relocate: move one stop to a better place --------------------
         for donor_id in list(tours):
             donor_stops = tours[donor_id]
             for position, request in enumerate(donor_stops):
@@ -217,36 +245,75 @@ def improve_tours(table: RouteTable, fleet: list[Drone],
                                             reserve_pct, service_min)
                 if not donor_after.feasible:
                     continue
-                gain = costs[donor_id].distance_km - donor_after.distance_km
-                if gain <= _EPS:
-                    continue
+                gain = costs[donor_id].cost - donor_after.cost
 
                 for taker_id in list(tours):
-                    if taker_id == donor_id:
-                        continue
-                    taker_stops = tours[taker_id]
-                    for slot in range(len(taker_stops) + 1):
-                        if policy == "safe" and not _priority_ok(taker_stops, slot, request):
-                            continue
-                        extended = taker_stops[:slot] + [request] + taker_stops[slot:]
+                    # taker == donor is allowed and matters: it reorders a
+                    # drone's own stops. Without it a drone keeps whatever
+                    # sequence the priority queue happened to produce, which is
+                    # how a tour ends up visiting a far customer before a near
+                    # one standing on the way.
+                    same = taker_id == donor_id
+                    base_stops = trimmed if same else tours[taker_id]
+                    base_cost = donor_after.cost if same else costs[taker_id].cost
+                    if not same and gain <= _EPS:
+                        continue        # nothing freed, so nothing to pay with
+
+                    for slot in range(len(base_stops) + 1):
+                        if same and slot == position:
+                            continue    # putting it back where it was
+                        extended = base_stops[:slot] + [request] + base_stops[slot:]
                         taker_after = simulate_tour(table, by_id[taker_id], extended,
                                                     reserve_pct, service_min)
                         if not taker_after.feasible:
                             continue
-                        if gain - (taker_after.distance_km
-                                   - costs[taker_id].distance_km) <= _EPS:
+                        if policy == "safe" and not safe_ordering(taker_after):
                             continue
-                        saved += gain - (taker_after.distance_km
-                                         - costs[taker_id].distance_km)
-                        tours[donor_id] = trimmed
-                        tours[taker_id] = extended
-                        costs[donor_id] = donor_after
-                        costs[taker_id] = taker_after
+                        net = (costs[donor_id].cost - taker_after.cost if same
+                               else gain - (taker_after.cost - base_cost))
+                        if net <= _EPS:
+                            continue
+                        saved += net
+                        if same:
+                            tours[donor_id] = extended
+                            costs[donor_id] = taker_after
+                        else:
+                            tours[donor_id] = trimmed
+                            tours[taker_id] = extended
+                            costs[donor_id] = donor_after
+                            costs[taker_id] = taker_after
                         moves += 1
                         improving = True
                         break
                     if improving:
                         break
+                if improving:
+                    break
+            if improving:
+                break
+        if improving:
+            continue
+
+        # --- 2-opt: reverse a run of stops within one tour ----------------
+        # Relocation moves one stop at a time and can stall on a tour that is
+        # simply threaded in the wrong order; reversing a segment escapes that.
+        for drone_id in list(tours):
+            stops = tours[drone_id]
+            for i in range(len(stops) - 1):
+                for j in range(i + 2, len(stops) + 1):
+                    candidate = stops[:i] + stops[i:j][::-1] + stops[j:]
+                    after = simulate_tour(table, by_id[drone_id], candidate,
+                                          reserve_pct, service_min)
+                    if not after.feasible or costs[drone_id].cost - after.cost <= _EPS:
+                        continue
+                    if policy == "safe" and not safe_ordering(after):
+                        continue
+                    saved += costs[drone_id].cost - after.cost
+                    tours[drone_id] = candidate
+                    costs[drone_id] = after
+                    moves += 1
+                    improving = True
+                    break
                 if improving:
                     break
             if improving:

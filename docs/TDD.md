@@ -433,6 +433,14 @@ that prevents division by zero and keeps time finite in extreme headwind.
     t(e)  =  d_e / v_g(e)                                            … (3)
 ```
 
+> **Limitation worth stating.** `W_MAX_MS` (20 m/s) exceeds the cruise airspeed `V_AIR_MS`
+> (15 m/s), so the model permits a wind a real aircraft could not make headway against. The
+> `V_MIN_MS` floor lets such a leg crawl at 3 m/s rather than taking infinite time, which
+> keeps the search well-defined but inflates schedules: Peak Load runs 29.5 minutes in calm
+> air and 108 minutes into an 18 m/s headwind. A fuller model would ground the fleet above a
+> threshold rather than fly it at walking pace. The routing remains correct — it is the
+> flight envelope that is generous.
+
 **Energy.** Modelling the drone as drawing roughly constant power in cruise, energy consumed
 is proportional to time aloft. Since the still-air baseline `g_base(e)` corresponds to
 `v_g = v_air`, the wind-adjusted energy is
@@ -984,32 +992,45 @@ ALGORITHM ImproveTours(table, fleet, tours, policy)
  1  if policy = off:  return tours
  2  budget ← max(60, 4·|deliveries|)                ▷ must scale with the batch
  3  repeat until no improving move, or budget spent:
- 4      for each donor D, each position i in tours[D]:
- 5          trimmed ← tours[D] without stop i
- 6          if trimmed is not flyable:  continue    ▷ battery must still hold
- 7          gain ← dist(tours[D]) − dist(trimmed)
- 8          if gain ≤ 0:  continue                  ▷ D was passing through anyway
- 9          for each taker T ≠ D, each slot j in tours[T]:
-10              if policy = safe and inserting here reorders urgency:  continue
-11              extended ← tours[T] with the stop inserted at j
-12              if extended is not flyable:  continue
-13              if gain − (dist(extended) − dist(tours[T])) > 0:
-14                  apply the move and restart                 ▷ first improvement
+ 4      ▷ relocate: move one stop to a better place, in any tour
+ 5      for each donor D, each position i in tours[D]:
+ 6          trimmed ← tours[D] without stop i
+ 7          if trimmed is not flyable:  continue    ▷ battery must still hold
+ 8          gain ← cost(tours[D]) − cost(trimmed)
+ 9          for each taker T (INCLUDING T = D), each slot j:
+10              candidate ← that tour with the stop inserted at j
+11              if candidate is not flyable:  continue
+12              if policy = safe and not SafeOrdering(candidate):  continue
+13              if the move lowers total cost:  apply and restart
+14      ▷ 2-opt: reverse a run of stops within one tour
+15      for each drone, each segment [i, j) of its tour:
+16          candidate ← tour with that segment reversed
+17          if flyable, permitted, and cheaper:  apply and restart
 ```
 
 Line 8 is what keeps the pass honest. A drone crossing a destination that its deliverer was
 going to pass through anyway is **not** waste: removing that stop saves nothing, `gain` is
 zero, and no move is made. The measure of success is therefore not "zero crossings" — that
-would demand something false — but **local optimality**: when planning ends, no relocation
-would shorten the total.
+would demand something false — but **local optimality**: when planning ends, no move would
+lower the total.
 
-Two details were wrong in the first implementation and are worth recording:
+Four things were wrong in earlier versions, each of which silently defeated the pass:
 
 * **The budget was a fixed 12 moves.** On a thirty-order batch the pass ran out part-way and
   left exactly the fly-overs it existed to remove. It now scales with the batch.
 * **Best-improvement was too slow** to converge inside any sane budget. First-improvement —
-  take the first move that helps and restart — reaches the same fixpoint far sooner, since
-  the loop only ends when no improving move exists at all.
+  take the first move that helps and restart — reaches the same fixpoint far sooner.
+* **`T = D` was excluded** (line 9), so the pass moved stops *between* drones but never
+  reordered a drone's own tour. A drone therefore kept whatever sequence the priority queue
+  happened to produce, which is how a tour ends up crossing the map to a far customer and
+  coming back for a near one it flew past. On Peak Load at three drones one tour flew 38.6 km
+  where the same stops in the right order need 17.5. Intra-tour relocation plus 2-opt now
+  reach the optimal ordering of every tour that the policy permits.
+* **Moves were scored on raw distance** while routes are chosen on composite cost. With calm
+  air and pure-distance weighting the two coincide, which is why an audit of exactly that case
+  found nothing. Under wind they diverge — the same corridor costs different amounts in each
+  direction — so the pass was optimising something the router was not using, and left
+  improving moves behind. It now scores the composite cost, whatever weighting is in force.
 
 #### 9.6.3 Policy
 
@@ -1018,26 +1039,55 @@ Whether a *less urgent* parcel may be inserted ahead of a more urgent one is a j
 | Policy | Rule |
 |---|---|
 | `off` | No improvement pass. Every delivery is planned independently. |
-| `safe` *(default)* | A move may not reorder urgency within a tour. Priority order is never inverted. |
-| `always` | Any distance-reducing move is taken. |
+| `safe` *(default)* | A stop may precede a more urgent one **only if it costs no detour**. |
+| `always` | Any cost-reducing move is taken. |
 
-`safe` is the default because a priority queue that a routing optimisation can silently
-override is not a priority queue. It leaves a small number of crossings unserved — those
-where the passing drone carries more urgent cargo — which is a stated trade rather than an
-oversight. On Peak Load at five drones with the aerodrome closed, `safe` reaches 58.5 km and
-`always` 54.3 km, the difference being exactly the moves `safe` declines.
+The obvious reading of `safe` — "a tour must be sorted urgent-first" — was tried and is
+**wrong**, because it produces the behaviour it is meant to prevent. A drone carrying an
+urgent parcel across the map is forced to fly *past* a routine delivery standing directly on
+its path, deliver the urgent one, and come back. Nobody gains: the urgent parcel arrives no
+sooner and the fleet flies a pointless detour.
+
+What actually matters is that urgent work is never delayed by a **detour**. So a less urgent
+stop may come first when the drone was flying through that point anyway and pays only the
+service stop — the `free` flag computed while flying the tour. Relaxing the rule this way cut
+Peak Load at three drones from 63.7 km to 54.5 and its makespan from 65.0 min to 60.5.
+
+Neither policy dominates, which is why both are offered:
+
+| Scenario | | `safe` | `always` |
+|---|---|---|---|
+| Medical Emergency, 5 drones | distance / last urgent | 32.7 km / **5.2 min** | 35.0 km / 13.7 min |
+| Peak Load, 3 drones | distance / last urgent | 54.5 km / **9.3 min** | **34.4 km** / 15.0 min |
+
+On Medical Emergency `safe` wins outright — it is both shorter and gets urgent cargo there
+two and a half times sooner. On Peak Load `always` is dramatically better on distance and
+makespan, and reaches the optimal ordering of every tour, at the cost of urgent parcels
+landing later. `safe` is the default because protecting the urgent guarantee is the point of
+having a priority queue at all; the remaining far-before-near cases under it are exactly
+"reaching the near stop needs a detour and this drone is carrying something urgent".
 
 #### 9.6.4 Verification
 
-The guarantee is checked by exhaustive audit, not by inspection. Across **1 120 planning
-runs** — the three demonstration plans, a batch covering all 22 customers, and batches of 20,
-25, 30 and 40 orders with both distinct and repeated destinations; fleet sizes 2, 3, 5 and 8;
-both policies; and five airspace configurations up to all three zones closed at once — **no
-run left an improving relocation unapplied**, none delivered a parcel twice, and none lost
-one. 17 342 relocations were applied in the course of those runs.
+The guarantee is checked by exhaustive audit, not by inspection.
 
-A subset of that audit runs in the test suite as `test_planning_leaves_no_improving_relocation`.
-Auditing it correctly requires care in one respect: `plan.drones` hold the fleet's *end*
+The **first** audit covered 1 120 runs — the three demonstration plans, a batch covering all
+22 customers, and batches of 20 to 40 orders with distinct and repeated destinations; fleet
+sizes 2, 3, 5 and 8; both policies; and five airspace configurations. Every run converged.
+That audit was **not sufficient**: every run used calm air and pure-distance weighting, which
+is precisely the case where scoring on distance and scoring on cost agree. It could not have
+detected the defect it was meant to rule out.
+
+The audit now sweeps the environment as well: **2 016 runs** over 7 batches × **6 wind
+vectors** × **4 weightings** (distance, balanced, energy, time) × 3 airspace configurations ×
+2 fleet sizes × 2 policies. Every run converged, with 34 425 improvement moves applied. No run
+delivered a parcel twice or lost one.
+
+A subset runs in the suite, including `test_planning_converges_under_wind` across four winds
+and three weightings, and `test_tours_are_not_threaded_far_before_near`, which brute-forces
+the optimal ordering of each tour and fails if the flown one is more than 2% worse.
+
+Auditing this correctly requires care in one respect: `plan.drones` hold the fleet's *end*
 state, each drone parked at its last destination on a depleted battery. Re-running the pass
 against those poses a different problem and reports improvements that do not exist. The audit
 must start from the fleet's initial state.

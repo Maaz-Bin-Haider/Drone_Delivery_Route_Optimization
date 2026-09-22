@@ -17,7 +17,8 @@ import random
 
 import pytest
 
-from ddros.cost.cost_model import SHORTEST_DISTANCE, CostModel
+from ddros.cost.cost_model import BALANCED, MINIMUM_ENERGY, SHORTEST_DISTANCE, CostModel
+from ddros.environment.wind import Wind
 from ddros.domain.models import DeliveryRequest, NodeType, Priority
 from ddros.scheduling.assignment import (POLICIES, assign_fleet, improve_tours,
                                          simulate_tour)
@@ -157,15 +158,53 @@ def test_every_tour_is_actually_flyable(table, scenario, customers, policy):
         assert simulate_tour(table, start, stops).feasible
 
 
-def test_safe_keeps_each_tour_in_priority_order(table, scenario, customers):
-    """Under `safe`, optimisation may not reorder urgency within a tour."""
+def test_safe_never_detours_ahead_of_more_urgent_work(table, scenario, customers):
+    """Under `safe`, a routine stop may precede an urgent one only if it is free.
+
+    Demanding a strictly urgent-first tour is the wrong rule and causes the very
+    behaviour it is meant to prevent: a drone carrying an urgent parcel across
+    the map is forced to fly *past* a routine delivery standing on its path and
+    come back for it. What must hold is that urgent work is never delayed by a
+    detour -- a free stop costs only the handover.
+    """
     batch = build(customers, 30, seed=13)
     plan = assign_fleet(table, scenario.drones[:5], batch, consolidate="safe")
     for drone in plan.drones:
         legs = sorted((a for a in plan.assignments if a.drone_id == drone.id),
                       key=lambda a: a.depart_min)
-        priorities = [a.priority for a in legs]
-        assert priorities == sorted(priorities)
+        for index, leg in enumerate(legs):
+            if leg.enroute:
+                continue                     # free: costs no detour
+            later = [x.priority for x in legs[index + 1:]]
+            assert not any(p < leg.priority for p in later), (
+                f"{drone.id} detours to {leg.destination} ({leg.priority.name}) "
+                f"ahead of more urgent work")
+
+
+def test_tours_are_not_threaded_far_before_near(table, scenario, customers):
+    """A drone must not cross the map and come back for a stop it flew past.
+
+    Measured as the gap to the best ordering of the same stops, which is what a
+    viewer perceives as the tour "going the wrong way round".
+    """
+    import itertools
+    batch = build(customers, 18, seed=77)
+    plan = assign_fleet(table, scenario.drones[:3], batch, consolidate="always")
+    start = scenario.graph.warehouse
+    for drone in plan.drones:
+        legs = sorted((a for a in plan.assignments if a.drone_id == drone.id),
+                      key=lambda a: a.depart_min)
+        stops = [a.destination for a in legs]
+        if not 2 <= len(stops) <= 7:
+            continue                          # keep the brute force tractable
+        flown = sum(a.route.distance_km for a in legs)
+        best = min(
+            sum(table.route(u, v).distance_km
+                for u, v in zip((start,) + order, order))
+            for order in itertools.permutations(stops)
+        )
+        assert flown <= best * 1.02 + 1e-6, (
+            f"{drone.id} flies {flown:.1f} km where {best:.1f} km orders the same stops")
 
 
 def test_a_free_stop_is_marked_and_explained(table, scenario, customers):
@@ -176,3 +215,52 @@ def test_a_free_stop_is_marked_and_explained(table, scenario, customers):
     assert free, "expected at least one detour-free stop in a dense batch"
     for a in free:
         assert "already flying" in a.reason
+
+
+# -- wind ------------------------------------------------------------------
+#
+# The first audit of this feature tested only calm air under pure-distance
+# weighting, and missed that the improvement pass was scoring moves on raw
+# distance while routes were being chosen on composite cost. Under wind the two
+# diverge -- the same corridor costs different amounts in each direction -- so
+# the pass optimised something the router was not using. These cases exist so
+# that gap cannot reopen.
+
+WINDS = [Wind(0, 0), Wind(10, 45), Wind(16, 225), Wind(20, 270)]
+
+
+@pytest.mark.parametrize("wind", WINDS, ids=lambda w: f"{w.speed_ms:.0f}@{w.bearing_deg:.0f}")
+@pytest.mark.parametrize("weights", [SHORTEST_DISTANCE, BALANCED, MINIMUM_ENERGY],
+                         ids=("distance", "balanced", "energy"))
+@pytest.mark.parametrize("policy", ("safe", "always"))
+def test_planning_converges_under_wind(city, scenario, customers, wind, weights, policy):
+    table = RouteTable(city, CostModel(city, weights, wind))
+    batch = build(customers, 20, seed=int(wind.bearing_deg) + 5)
+    fleet = scenario.drones[:5]
+    plan = assign_fleet(table, fleet, batch, consolidate=policy)
+    moves, saved = residual(table, plan, batch, policy, fleet)
+    assert moves == 0, f"{moves} moves worth {saved:.3f} left under wind {wind.as_dict()}"
+
+
+def test_the_pass_scores_moves_on_the_active_objective(city, scenario, customers):
+    """Improvement must track the objective in force, not raw distance.
+
+    Under a strong wind with energy weighting, the cheapest tour by energy is
+    not the shortest by distance. If the pass still scored distance it would
+    make moves the router disagrees with, and leave improving moves behind.
+    """
+    wind = Wind(18.0, 45.0)
+    table = RouteTable(city, CostModel(city, MINIMUM_ENERGY, wind))
+    batch = build(customers, 20, seed=404)
+    fleet = scenario.drones[:5]
+    plan = assign_fleet(table, fleet, batch, consolidate="always")
+    assert residual(table, plan, batch, "always", fleet)[0] == 0
+
+    tours = tours_of(plan, {p.id: p for p in batch})
+    energy = sum(simulate_tour(table, next(d for d in fleet if d.id == k), v).energy_pct
+                 for k, v in tours.items())
+    plain = assign_fleet(table, fleet, batch, consolidate="off")
+    tours_off = tours_of(plain, {p.id: p for p in batch})
+    energy_off = sum(simulate_tour(table, next(d for d in fleet if d.id == k), v).energy_pct
+                     for k, v in tours_off.items())
+    assert energy <= energy_off + 1e-6

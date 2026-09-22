@@ -81,14 +81,17 @@
              `${o.drones}: ${o.makespan_min.toFixed(0)}m${mark}</span>`;
     }).join('');
     el.innerHTML =
-      `<b>${f.chosen} of ${f.chosen + f.reserve.length} launched</b>` +
+      `<b>${f.launched} of ${f.launched + f.reserve.length} launched</b>` +
       (f.reserve.length ? ` &middot; reserve ${esc(f.reserve.join(' '))}` : '') +
       `<span class="why">${esc(f.reason)}</span>` +
       `<div class="sizes">${sizes}</div>`;
   }
 
   function renderFleet(plan) {
-    document.getElementById('fleet').innerHTML = plan.drones.map((d, i) => {
+    // Drones held in reserve are named in the sizing note above; giving them a
+    // card each, reading "0 pkg / 0.0 km", just repeats that as noise.
+    const flying = plan.drones.filter(d => d.deliveries > 0);
+    document.getElementById('fleet').innerHTML = flying.map((d, i) => {
       const low = d.battery_pct < 30;
       return `<div class="fleet-card">
         <div class="head">${droneTag(d.id, plan)}

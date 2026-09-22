@@ -208,7 +208,9 @@
   function renderLegend(plan, order) {
     const el = document.getElementById('legend');
     if (!el) return;
-    const rows = plan.drones.map(d => {
+    // Only drones that actually flew: the roster may be larger than the fleet
+    // the sizer launched, and listing idle aircraft just clutters the key.
+    const rows = plan.drones.filter(d => d.deliveries > 0).map(d => {
       const i = order[d.id] || 0;
       const dash = dashFor(d.id, i);
       const bg = dash

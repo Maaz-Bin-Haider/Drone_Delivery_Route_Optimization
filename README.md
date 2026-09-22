@@ -4,145 +4,201 @@
 
 A simulation that plans, prioritizes and assigns unmanned package deliveries across
 **Kestrel Bay**, a fictional coastal city of 34 named locations served by a roster of eight
-drones, of which it decides how many to actually launch. It automates four decisions a human dispatcher would otherwise make by hand: which
-delivery goes next, which drone takes it, which route that drone flies, and whether the route
-is energy-feasible.
+drones — of which it decides how many to actually launch.
 
-No single algorithm solves the problem. A weighted graph models the city, a priority queue
-orders the work, Dijkstra and A* find routes, and greedy strategies pick the drone — each
-handling a different part of the whole.
+![The dashboard: Kestrel Bay with a planned delivery round](docs/images/dashboard.png)
 
-## Documentation
+It automates four decisions a human dispatcher would otherwise make by hand:
 
-| Document | Contents |
-|---|---|
-| [Software Requirements Specification](docs/SRS.md) | IEEE 830-1998. What the system must do, as numbered and traceable requirements. |
-| [Technical Design Document](docs/TDD.md) | Architecture, cost mathematics, algorithm pseudocode and complexity, experimental results. |
+| | Decision | How |
+|---|---|---|
+| 1 | Which delivery goes next | Priority queue over a hand-written binary min-heap |
+| 2 | Which drone takes it | Greedy assignment, then a local-search improvement pass |
+| 3 | Which route it flies | Dijkstra or A* over a weighted graph, under a configurable cost |
+| 4 | Whether the route is feasible | Energy budget, with rerouting through charging pads |
 
-## Running it
+No single algorithm solves the problem. A graph models the city, a priority queue orders the
+work, Dijkstra and A* find routes, and greedy strategies pick the drone — each handling a
+different part of the whole.
 
+---
+
+## Quick start
+
+```bash
+pip install -r requirements.txt
+python run.py serve          # dashboard at http://127.0.0.1:5000
 ```
-python run.py serve                            launch the web dashboard
+
+```bash
 python run.py plan                             plan the batch and print the schedule
 python run.py plan --beta 0.6                  weight the objective toward energy
 python run.py plan --wind 12 --bearing 250     plan under a westerly wind
-python run.py plan --nfz nfz_aerodrome         activate a no-fly zone
-python run.py plan --drones 3                 force a fleet size
-python run.py plan --consolidate always       take every parcel found en route
+python run.py plan --nfz nfz_aerodrome         close an airspace
+python run.py plan --drones 3                  force a fleet size
+python run.py plan --consolidate always        take every parcel found en route
 python run.py compare DEP L16                  Dijkstra against A* on one pair
-python run.py alternatives L06 L21 --wind 16 --bearing 225
 python run.py queue                            show the dispatch order
 python run.py benchmark                        run all seven experiments
-python run.py benchmark --experiment 5         run one experiment
-python run.py benchmark --quick                smaller graphs, fewer repetitions
 ```
 
-## Dashboard
+---
 
-`python run.py serve`, then open <http://127.0.0.1:5000>.
+## Kestrel Bay
 
-Kestrel Bay is fictional, so there is no base map: its bay, river, parks and districts are
-drawn from local data, which leaves the application with **no network dependency at run
-time**. Each drone gets one colour *and* one dash pattern, so routes stay distinguishable
-under colour-vision deficiency and on a projector.
+<img src="docs/images/city-map.png" alt="The fictional city of Kestrel Bay" width="720">
 
-**Composing a batch.** Three prepared demonstration plans are one click away:
+The city is invented, so there is no base map to tile: its bay, river, parks and nine named
+districts are drawn from local data, which leaves the application with **no network
+dependency at run time**. 34 locations — one depot, four charging pads, 22 customers and
+seven junctions — joined by 92 air corridors.
+
+Each drone gets one colour **and** one dash pattern, so routes stay distinguishable under
+colour-vision deficiency and on a projector.
+
+### Demonstration plans
 
 | Plan | What it shows |
 |---|---|
-| Morning Round | The baseline. Ten routine parcels; all five drones share the work and nothing needs recharging. |
-| Medical Emergency | Four urgent consignments queued behind six routine parcels — the priority queue overtaking work that arrived first. |
-| Peak Load | Eighteen parcels to the far corners. Batteries run down and drones start routing through charging pads. |
+| **Morning Round** | The baseline. Ten routine parcels, work shared across the fleet, no recharging. |
+| **Medical Emergency** | Four urgent consignments submitted *behind* six routine ones — the priority queue overtaking work that arrived first. |
+| **Peak Load** | Eighteen parcels to the far corners. Batteries run down and drones route through charging pads. |
 
-You can also clear the batch and build one by hand, choosing each destination by name and
-district and setting its priority, or remove individual orders.
+You can also clear the batch and build your own, choosing each destination by name and
+district and setting its priority.
 
-**Fleet sizing.** The roster is a pool, not a launch order. The system plans at every fleet
-size and launches the smallest one that is as fast as the best — a tenth aircraft that saves
-four seconds is not worth the launch. Sizes that fail to complete the batch are excluded on
-service level, never on speed. The panel shows what each size achieved and why one was
-picked, and the size can be forced to demonstrate the difference.
+---
 
-**En-route drops.** A drone whose route crosses another destination delivers it in passing
-rather than sending a second drone to a place it was already flying over. Each drone's plan is
-a tour, and an improvement pass relocates deliveries between tours while doing so shortens
-total flight distance. Three policies: *off*, *safe* (default — a move may not reorder urgency
-within a tour) and *always*.
+## The delivery plan
 
-The pass also reorders each drone's own stops, so a tour never crosses the map to a far
-customer and comes back for a near one it flew past.
+![The delivery plan table, fleet panel and fleet-sizing decision](docs/images/delivery-plan.png)
 
-The guarantee is that **when planning finishes, no move would lower the total cost** — of a
-delivery to another drone, of a stop to another place in its own tour, or of a reversed run of
-stops. Verified across 2,016 planning runs covering every demonstration plan, batches of 20–40
-orders with distinct and repeated destinations, **six wind vectors**, **four routing
-weightings**, fleet sizes 2–8, and every no-fly-zone combination. See [TDD §9.6](docs/TDD.md).
+Every row explains itself. *Why this drone* names the alternatives and their completion
+times; an **en route** badge marks a stop that cost no detour, with a dash for distance and
+energy because it added none. The fleet panel shows which aircraft were launched, which were
+held in reserve, and what every fleet size would have achieved.
 
-Weight, wind and airspace controls replan live. The plan table gives every delivery its
-route, distance, energy, arrival time and the reason that drone was chosen over the others.
 Playback flies the fleet on a shared clock: each drone is drawn as a quadcopter turned to its
-heading, rotors spinning only while it is actually airborne, and each delivery releases a
-parcel over its destination.
+heading, rotors spinning only while airborne, releasing a parcel over each destination.
+
+---
+
+## Algorithms and data structures
+
+| Problem | Technique | Where |
+|---|---|---|
+| Represent the city | Weighted graph, adjacency list | `graph/graph.py` |
+| Order the frontier and the queue | Binary min-heap, written from scratch | `structures/min_heap.py` |
+| Minimum-cost route | Dijkstra's algorithm | `algorithms/dijkstra.py` |
+| Goal-directed route | A* with an admissible haversine heuristic | `algorithms/astar.py` |
+| Prioritize deliveries | Priority queue, FIFO within a class | `scheduling/priority_queue.py` |
+| Assign work | Greedy list scheduling for minimum makespan | `scheduling/assignment.py` |
+| Improve the schedule | Relocate + 2-opt local search | `scheduling/assignment.py` |
+| Choose the fleet size | Exhaustive sweep with a tolerance | `scheduling/fleet_sizing.py` |
+| Energy-feasible routing | Two-search charging reroute; exact Pareto variant | `algorithms/constrained.py` |
+
+Dijkstra, A*, the min-heap and the greedy strategies are implemented from first principles
+rather than imported, since they are the subject of the project. `heapq` appears only in the
+test suite, as an oracle to cross-check the hand-written heap.
+
+The A* heuristic is **proved** admissible and consistent in TDD §7.3, and both properties are
+asserted by tests across every weight and wind combination. Every planning cycle re-checks
+that A* and Dijkstra agree on cost, so an inadmissible heuristic fails loudly rather than
+silently returning sub-optimal routes.
+
+---
+
+## Architecture
+
+![Three-tier architecture](docs/images/architecture.svg)
+
+The algorithm tier imports nothing from the web tier, so it can be tested and benchmarked
+without starting a server. `test_layering.py` enforces this rather than trusting it.
+
+---
 
 ## Experiments
 
 The harness measures every complexity claim the design makes rather than asserting it.
-Headline results, reproducible with `python run.py benchmark`:
+Reproduce with `python run.py benchmark`.
+
+![Nodes expanded: Dijkstra vs A* across graph sizes](docs/images/benchmark-expansion.svg)
 
 | # | Question | Result |
 |---|---|---|
-| 1 | Does A* actually search less than Dijkstra? | Yes, and increasingly so with scale: 52% of Dijkstra's expansions at V=10, 21.7% at V=1000. |
-| 2 | Does runtime match the derived `O((V+E) log V)`? | R² = 0.992 (Dijkstra), 0.991 (A*). |
-| 3 | Does energy-aware routing save energy? | Per journey yes; per batch **no** when the fleet is near its battery limit — slower routes trigger charging detours. |
-| 4 | What does each extra drone buy? | Superlinear speedup — and makespan is **not monotone**: six drones are slower than five. |
-| 5 | How good is the greedy schedule? | 23% above optimal on average, 66% worst case. |
+| 1 | Does A* actually search less than Dijkstra? | Yes, increasingly so with scale: **52% → 22%** of Dijkstra's expansions from V=10 to V=1000. |
+| 2 | Does runtime match the derived `O((V+E) log V)`? | **R² = 0.992** (Dijkstra), 0.991 (A*). |
+| 3 | Does energy-aware routing save energy? | Per journey yes; **per batch no** when the fleet is near its battery limit. |
+| 4 | What does each extra drone buy? | Superlinear speedup — and makespan is **not monotone**. |
+| 5 | How good is the greedy schedule? | **23% above optimal** on average, 66% worst case. |
 | 6 | Is the fast feasibility test safe? | Conservative, never unsafe — but exact search costs only 1.2× more at this scale. |
-| 7 | Do wind and no-fly zones change decisions? | 381 of 561 node pairs are wind-sensitive. |
+| 7 | Do wind and no-fly zones change decisions? | **381 of 561** node pairs are wind-sensitive. |
 
-Experiments 3, 4 and 6 each contradicted their own starting hypothesis, and the fleet sweep
-reproduces **Graham's timing anomaly** — adding a drone can lengthen the schedule. A control
-run with identical batteries and no charging detours shows the anomaly survives, so its cause
-is sequence-dependent travel inside the greedy assignment rather than the fleet's battery
-states. That is why the system chooses its fleet size rather than launching everything. All
-of it is reported in [TDD §16](docs/TDD.md) and §9.4 as observed, not corrected away.
+### Findings that contradicted the hypothesis
+
+Three experiments disproved their own starting assumption. They are reported as observed, not
+corrected away — the contradiction is the result worth reading.
+
+- **Graham's timing anomaly reproduces here.** Adding a drone can *lengthen* the schedule.
+  A control run with identical batteries and zero charging detours shows it survives, so the
+  cause is sequence-dependent travel inside the greedy assignment, not battery state. This is
+  why the system chooses its fleet size rather than launching everything.
+- **Energy-optimal routing can raise total batch energy**, because slower routes delay drones
+  into charging detours that cost more than the per-route saving recovers.
+- **The fast feasibility test is conservative, not unsafe** — every disagreement was a false
+  refusal, never a false promise — but timed fairly, the exact method costs only 1.2× more,
+  so the approximation is justified by scale rather than by this scenario.
+
+### No wasteful fly-overs
+
+An earlier version let a drone fly straight over a pending destination while a second drone
+was dispatched to that same place. Each drone's plan is now a **tour**, and a local-search
+pass relocates deliveries — between tours and within one — while doing so lowers total cost.
+
+The guarantee is that **when planning finishes, no move would lower the total**. Verified
+across **2,016 planning runs**: every demonstration plan, batches of 20–40 orders with
+distinct and repeated destinations, six wind vectors, four routing weightings, fleet sizes
+2–8, and every no-fly-zone combination. All converged.
+
+---
 
 ## Tests
 
-```
+```bash
 python -m pytest tests -q
 python -m pytest tests -q --cov=ddros
 ```
 
-276 tests, 93% statement coverage.
+**277 tests, 94% statement coverage.** Unit, property, integration, contract and architectural
+tests, including admissibility and consistency proofs checked numerically, a determinism
+check, and a convergence audit of the improvement pass under wind.
+
+---
 
 ## Layout
 
 ```
 ddros/
-  web/              Flask API and the Leaflet dashboard
   geo.py            haversine, bearing, projection, polygon geometry
   graph/            adjacency-list city graph and its validation
   structures/       hand-written binary min-heap
   cost/             composite distance/energy/time cost model
   environment/      wind field and no-fly zones
   algorithms/       Dijkstra, A*, heuristics, energy-constrained routing
-  scheduling/       priority queue, greedy assignment, fleet sizing
+  scheduling/       priority queue, tours, improvement pass, fleet sizing
   simulation/       planning orchestrator, all-pairs route cache
   analysis/         search instrumentation and benchmarking
+  web/              Flask API and the Leaflet dashboard
 data/               city map and backdrop, fleet, batch, demo plans, no-fly zones
 tests/              unit, property, integration, contract and architectural tests
+docs/               SRS, technical design document, images
 ```
 
-The algorithm tier imports nothing from the web tier, so it can be tested and benchmarked
-without starting a server. A test enforces this rather than trusting it.
+---
 
-## Design notes
+## Documentation
 
-Dijkstra, A*, the min-heap and the greedy strategies are implemented from first principles
-rather than imported, since they are the subject of the project. `heapq` appears only in the
-test suite, as an oracle to cross-check the hand-written heap.
-
-The A* heuristic is proved admissible and consistent in TDD sections 7.3.2 and 7.3.3, and both
-properties are asserted by tests across every weight and wind combination. Every planning
-cycle re-checks that A* and Dijkstra agree on cost, so an inadmissible heuristic would fail
-loudly rather than silently return sub-optimal routes.
+| Document | Contents |
+|---|---|
+| [Software Requirements Specification](docs/SRS.md) | IEEE 830-1998. What the system must do, as numbered and traceable requirements. |
+| [Technical Design Document](docs/TDD.md) | Architecture, cost mathematics, algorithm pseudocode and complexity, and the observed results of all seven experiments. |

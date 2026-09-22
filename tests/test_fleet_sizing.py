@@ -88,8 +88,10 @@ def test_service_level_is_filtered_before_speed(table, scenario, customers):
 def test_a_forced_size_is_honoured(table, scenario, customers):
     sizing = size_fleet(table, scenario.drones, batch(customers, 10), fixed=3)
     assert sizing.chosen == 3
-    assert len(sizing.dispatched) == 3
     assert "fixed" in sizing.reason
+    # `chosen` records the decision; `launched` records what flew, and the
+    # improvement pass may have consolidated a tour away entirely.
+    assert sizing.launched <= sizing.chosen
 
 
 def test_a_forced_size_is_clamped_to_the_roster(table, scenario, customers):
@@ -114,9 +116,24 @@ def test_a_generous_tolerance_launches_fewer_aircraft(table, scenario, customers
 
 def test_dispatched_and_reserve_partition_the_roster(table, scenario, customers):
     sizing = size_fleet(table, scenario.drones, batch(customers, 6))
-    assert len(sizing.dispatched) == sizing.chosen
+    assert len(sizing.dispatched) == sizing.launched
     assert set(sizing.dispatched) | set(sizing.reserve) == {d.id for d in scenario.drones}
     assert not set(sizing.dispatched) & set(sizing.reserve)
+
+
+def test_a_drone_left_empty_by_the_improvement_pass_is_not_reported_as_flying(
+        table, scenario, customers):
+    """The sizer decides before the improvement pass consolidates tours.
+
+    If a selected drone ends up carrying nothing, reporting it as launched
+    overstates the fleet -- and the interface would show a drone with 0 pkg
+    sitting in the key.
+    """
+    for count in (10, 18, 25):
+        sizing = size_fleet(table, scenario.drones, batch(customers, count))
+        flying = {d.id for d in sizing.plan.drones if d.assigned}
+        assert set(sizing.dispatched) == flying
+        assert not (set(sizing.reserve) & flying)
 
 
 def test_the_returned_plan_matches_the_chosen_size(table, scenario, customers):

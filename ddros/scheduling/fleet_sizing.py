@@ -58,15 +58,28 @@ class SizingOption:
 @dataclass
 class FleetSizing:
     chosen: int
+    """The size the sweep selected. Indexes into `options`."""
     reason: str
     options: list[SizingOption]
     plan: FleetPlan
     dispatched: list[str]
     reserve: list[str]
 
+    @property
+    def launched(self) -> int:
+        """Drones that actually flew.
+
+        Not always the size selected: the improvement pass runs inside the
+        assignment and can consolidate a tour away entirely, leaving a selected
+        drone with nothing to carry. `chosen` records the decision, `launched`
+        records the outcome, and reporting them separately keeps both honest.
+        """
+        return len(self.dispatched)
+
     def as_dict(self) -> dict:
         return {
             "chosen": self.chosen,
+            "launched": self.launched,
             "reason": self.reason,
             "dispatched": list(self.dispatched),
             "reserve": list(self.reserve),
@@ -131,9 +144,17 @@ def size_fleet(table: RouteTable, roster: list[Drone],
         chosen, reason = _select(options, tolerance)
 
     plan = plans[chosen]
-    dispatched = [d.id for d in ordered[:chosen]]
-    return FleetSizing(chosen, reason, options, plan, dispatched,
-                       [d.id for d in ordered[chosen:]])
+    # The improvement pass runs inside the assignment and can consolidate a
+    # tour away entirely, leaving a selected drone with nothing to carry.
+    # Reporting the size the sizer picked would then overstate the fleet, so
+    # what is reported is what actually flew.
+    flew = [d.id for d in plan.drones if d.assigned]
+    idle_but_selected = [d.id for d in ordered[:chosen] if d.id not in flew]
+    reserve = [d.id for d in ordered[chosen:]] + idle_but_selected
+    if idle_but_selected:
+        reason += (f". The improvement pass then consolidated onto {len(flew)}, "
+                   f"leaving {', '.join(idle_but_selected)} on the ground")
+    return FleetSizing(chosen, reason, options, plan, flew, reserve)
 
 
 def _select(options: list[SizingOption], tolerance: float) -> tuple[int, str]:

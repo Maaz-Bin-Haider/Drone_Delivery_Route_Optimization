@@ -85,7 +85,7 @@ def cmd_plan(args) -> None:
             print(f"  {u['delivery_id']} -> {u['destination']}: {u['reason']}")
 
     f = result["fleet"]
-    print(f"\nFLEET  {f['chosen']} of {f['chosen'] + len(f['reserve'])} dispatched"
+    print(f"\nFLEET  {f['launched']} of {f['launched'] + len(f['reserve'])} dispatched"
           + (f"  (reserve: {' '.join(f['reserve'])})" if f["reserve"] else ""))
     print(f"  {f['reason']}")
     if len(f["options"]) > 1:

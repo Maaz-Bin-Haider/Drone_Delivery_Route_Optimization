@@ -15,7 +15,7 @@
 |---|---|
 | Project type | **Individual project** |
 | Group number | **02** |
-| Author | `<YOUR NAME>` |
+| Author | **Maaz Bin Haider** |
 | Institution | `<UNIVERSITY / DEPARTMENT>` |
 | Course instructor | `<PROFESSOR NAME>` |
 | Submission date | `<DEADLINE>` |

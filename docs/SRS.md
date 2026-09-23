@@ -283,7 +283,7 @@ present an unexplained result.
 |---|---|
 | SI-1 | The application tier **shall** expose a JSON-over-HTTP interface to the presentation tier. Request and response schemas are specified in the Technical Design Document. |
 | SI-2 | The system **shall** read scenario data — city map, drone fleet, delivery batch, no-fly zones — from UTF-8 encoded JSON files conforming to the published schema. |
-| SI-3 | The system **shall** export simulation results as JSON and CSV. |
+| SI-3 | The system **shall** export simulation results as CSV from the interface, and as JSON through the API and the command line. |
 | SI-4 | The system **shall not** depend on any network service at run time other than optional map tiles. |
 
 #### 3.1.4 Communications Interfaces
@@ -453,7 +453,7 @@ section of the originating project brief that mandates it.
 | FR-10.3 | For each delivery, the system **shall** display: the selected drone, the package identifier, the destination, the ordered route as vertex names, the total distance in kilometres, the estimated energy consumption as a percentage, the priority class, the algorithm used, the estimated delivery time, and any charging stop. | Must |
 | FR-10.4 | The system **shall** display, per drone, its remaining state of charge and its delivery timeline. | Must |
 | FR-10.5 | The system **shall** display batch-level totals: makespan, total distance, total energy, deliveries completed and deliveries unserviceable. | Must |
-| FR-10.6 | The system **shall** export the complete plan as JSON and CSV. | Must |
+| FR-10.6 | The system **shall** export the complete plan. The interface **shall** offer CSV, which is the format a reader opens directly; JSON remains available through `/api/export?format=json` and `run.py plan --json` for anything consuming the plan programmatically. | Must |
 | FR-10.7 | Every displayed decision **shall** be accompanied by the reason for it, in keeping with the explainability obligation of §2.3. | Must |
 
 ---

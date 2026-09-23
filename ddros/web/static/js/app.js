@@ -208,8 +208,6 @@
     document.getElementById('btn-plan').addEventListener('click', plan);
     document.getElementById('btn-csv').addEventListener('click',
       () => { window.location = '/api/export?format=csv'; });
-    document.getElementById('btn-json').addEventListener('click',
-      () => { window.open('/api/export?format=json', '_blank'); });
     document.getElementById('btn-play').addEventListener('click', D.animation.play);
     document.getElementById('btn-pause').addEventListener('click', D.animation.pause);
     document.getElementById('btn-reset').addEventListener('click', D.animation.reset);

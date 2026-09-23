@@ -1,7 +1,5 @@
 # Drone Delivery Route Optimization System
 
-**Maaz Bin Haider** · Design & Analysis of Algorithms — individual project, Group 02
-
 A simulation that plans, prioritizes and assigns unmanned package deliveries across
 **Kestrel Bay**, a fictional coastal city of 34 named locations served by a roster of eight
 drones — of which it decides how many to actually launch.

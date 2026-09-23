@@ -2,23 +2,11 @@
 
 ## Drone Delivery Route Optimization System
 
-**Course:** Design & Analysis of Algorithms (DAA)
 **Document version:** 1.4
 **Date:** 22 September 2026
 **Prepared in accordance with:** IEEE Std 830-1998, *IEEE Recommended Practice for Software Requirements Specifications*
 
 ---
-
-### Document Control
-
-| Field | Value |
-|---|---|
-| Project type | **Individual project** |
-| Group number | **02** |
-| Author | **Maaz Bin Haider** |
-| Institution | `<UNIVERSITY / DEPARTMENT>` |
-| Course instructor | `<PROFESSOR NAME>` |
-| Submission date | `<DEADLINE>` |
 
 ### Revision History
 
@@ -28,7 +16,7 @@
 | 1.1 | 22 Sep 2026 | Fictional city of Kestrel Bay (34 locations); fleet raised to five; operator-composed batches and prepared demonstration plans added |
 | 1.2 | 22 Sep 2026 | Roster of eight with automatic fleet sizing; parcel-release animation on delivery; map sizing requirements |
 | 1.3 | 22 Sep 2026 | En-route consolidation: a drone crossing a pending destination delivers it in passing |
-| 1.4 | 23 Sep 2026 | Recorded as an individual project; group roster removed |
+| 1.4 | 23 Sep 2026 | Administrative cover details removed; the document stands on its technical content |
 
 ---
 
@@ -50,8 +38,7 @@ requirements of the **Drone Delivery Route Optimization System (DDROS)**, a simu
 platform that plans, prioritizes and assigns unmanned aerial package deliveries across a
 modelled city.
 
-The document is intended for the author, the course instructor acting as the evaluating
-authority, and any future maintainer of the codebase. It is the
+The document is intended for anyone implementing, reviewing or maintaining the system. It is the
 authoritative statement of *what* the system must do. The companion
 [Technical Design Document](TDD.md) specifies *how* those requirements are realised.
 
@@ -81,11 +68,11 @@ consumption per delivery, prevents urgent packages from queuing behind routine o
 distributes work across the fleet instead of overloading a single aircraft, and lowers
 operational cost by eliminating unnecessary travel.
 
-**Academic objective.** DDROS is the coursework deliverable for a Design & Analysis of
-Algorithms module. Its secondary purpose is therefore pedagogical: it must demonstrate
-graphs, adjacency lists, priority queues, Dijkstra's algorithm, A* search and greedy
+**Analytical objective.** The system has a second purpose beyond planning deliveries: it must
+show graphs, adjacency lists, priority queues, Dijkstra's algorithm, A* search and greedy
 strategies operating together inside one realistic problem, and it must support **empirical
-measurement** of those algorithms alongside their theoretical complexity.
+measurement** of those algorithms alongside their derived complexity. Every complexity claim
+the design makes is therefore measured rather than asserted.
 
 **Out of scope.** The following are explicitly excluded from this release:
 
@@ -106,7 +93,6 @@ measurement** of those algorithms alongside their theoretical complexity.
 | **Admissible heuristic** | A heuristic that never overestimates the true remaining cost to the goal; required for A* optimality. |
 | **Bearing** | Compass direction of travel along an edge, measured in degrees clockwise from true north. |
 | **Consistent heuristic** | A heuristic satisfying h(n) ≤ c(n, n') + h(n'); guarantees each node is expanded at most once by A*. |
-| **DAA** | Design & Analysis of Algorithms. |
 | **DDROS** | Drone Delivery Route Optimization System — the product specified herein. |
 | **Dijkstra's algorithm** | Single-source shortest-path algorithm for graphs with non-negative edge weights. |
 | **Edge** | A traversable air corridor between two locations, weighted by distance, time and energy. |
@@ -207,11 +193,11 @@ The system performs eight principal functions:
 
 | User class | Description | Technical expertise | Frequency of use |
 |---|---|---|---|
-| **Evaluator** | Course instructor assessing correctness, algorithmic depth and analysis quality. | Expert in algorithms; not assumed familiar with this codebase. | Once, during assessment. |
+| **Reviewer** | Reads the system to judge correctness, algorithmic depth and the quality of the analysis. | Expert in algorithms; not assumed familiar with this codebase. | Occasionally, on first contact. |
 | **Operator** | Person driving the simulation during a live demonstration — loading scenarios, adjusting weights and wind, triggering replanning. | General computing literacy; no programming required. | Frequently during demonstration. |
 | **Developer** | The author, or anyone later extending or maintaining the system. | Proficient in Python and familiar with graph algorithms. | Continuously during development. |
 
-Because the Evaluator is a first-time user, **every decision the system makes shall be
+Because the Reviewer is a first-time reader, **every decision the system makes shall be
 displayed with the reasoning behind it** — the drone chosen, the route taken, the distance,
 the energy consumed, the priority class and the algorithm used. The system must never
 present an unexplained result.
@@ -220,7 +206,7 @@ present an unexplained result.
 
 | Ref | Constraint |
 |---|---|
-| C-1 | **Algorithms shall be implemented from first principles.** Dijkstra, A*, the min-heap priority queue and the greedy assignment strategy shall be written for this project. Calling a library shortest-path routine (e.g. `networkx.shortest_path`, `scipy.sparse.csgraph`) to satisfy FR-3 is prohibited, as it would defeat the academic purpose of the project. |
+| C-1 | **Algorithms shall be implemented from first principles.** Dijkstra, A*, the min-heap priority queue and the greedy assignment strategy shall be written for this project. Calling a library shortest-path routine (e.g. `networkx.shortest_path`, `scipy.sparse.csgraph`) to satisfy FR-3 is prohibited, as the algorithms are the substance of the work. |
 | C-2 | Edge weights shall be non-negative, which is a precondition of Dijkstra's correctness. |
 | C-3 | The A* heuristic shall be admissible and consistent, and this property shall be justified in the design documentation. |
 | C-4 | The system shall run offline on a single machine. Because the city is fictional and its backdrop is drawn from local data, no base-map or other network service is contacted at run time. |
@@ -472,7 +458,7 @@ section of the originating project brief that mandates it.
 
 ---
 
-#### FR-11 — Algorithm Analysis and Benchmarking  *(DAA requirement)*
+#### FR-11 — Algorithm Analysis and Benchmarking
 
 | Ref | Requirement | Priority |
 |---|---|---|
@@ -571,7 +557,7 @@ section of the originating project brief that mandates it.
 | — | Extension: operator-composed batches and demonstration plans | FR-2.7 – FR-2.10, UI-13, UI-14 |
 | — | Extension: no-fly zones | FR-8.1 – FR-8.6 |
 | — | Extension: wind and weather | FR-9.1 – FR-9.7 |
-| — | DAA analysis obligation | FR-11.1 – FR-11.7, NFR-17 |
+| — | Complexity analysis and measurement | FR-11.1 – FR-11.7, NFR-17 |
 
 ### Appendix B — Algorithm and Data Structure Allocation
 
@@ -596,7 +582,6 @@ records where each is used and which requirement mandates it.
 |---|---|---|
 | O-1 | FR-11.3 requires benchmarking across a range of graph sizes, while the map is specified as a single hand-crafted city (FR-1.8). The resolution adopted is that the application always uses the fixed demonstration map, and the benchmarking harness additionally generates synthetic graphs of varying size purely as test fixtures. These synthetic graphs are never exposed in the user interface. | Assumed; to be confirmed |
 | O-2 | Whether the aging policy of FR-6.6 is implemented. | Optional |
-| O-3 | Cover-page details: group number, member names, seat numbers, institution, instructor, deadline. | Awaiting input |
 
 ---
 

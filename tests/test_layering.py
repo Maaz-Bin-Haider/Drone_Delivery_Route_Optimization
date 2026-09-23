@@ -36,14 +36,14 @@ def test_module_does_not_import_the_web_layer(path):
 
 
 def test_algorithm_tier_avoids_heavy_numeric_dependencies():
-    """Every operation a grader inspects should be explicit Python."""
+    """Every operation should be explicit Python, not hidden in a numeric library."""
     for path in sources():
         text = path.read_text(encoding="utf-8")
         assert "import numpy" not in text, f"{path.name} imports numpy"
 
 
 def test_shortest_path_is_not_delegated_to_a_library():
-    """Constraint C-1: the algorithms are the assessed deliverable."""
+    """Constraint C-1: the algorithms are the substance of the work."""
     for path in sources():
         text = path.read_text(encoding="utf-8")
         assert "networkx" not in text, f"{path.name} references networkx"

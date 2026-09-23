@@ -76,7 +76,7 @@ def residual(table, plan, batch, policy, fleet):
 @pytest.mark.parametrize("drones", (3, 5, 8))
 def test_planning_leaves_no_improving_relocation(table, scenario, customers,
                                                  policy, count, distinct, drones):
-    """The load the marker is most likely to try: 20-30 custom orders."""
+    """A realistic hand-built load: 20-30 custom orders."""
     batch = build(customers, count, seed=count * 7 + drones, distinct=distinct)
     fleet = scenario.drones[:drones]
     plan = assign_fleet(table, fleet, batch, consolidate=policy)

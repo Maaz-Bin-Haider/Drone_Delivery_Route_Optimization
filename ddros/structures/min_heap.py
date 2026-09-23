@@ -2,7 +2,7 @@
 
 Constraint C-1 of the SRS requires the priority queue to be written for this
 project rather than imported, since it is one of the data structures the work
-is assessed on. `heapq` appears only in the test suite, as a cross-checking oracle.
+is about. `heapq` appears only in the test suite, as a cross-checking oracle.
 
 Complexity: push O(log n), pop_min O(log n), peek O(1), heapify O(n).
 """

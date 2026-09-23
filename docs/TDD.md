@@ -2,23 +2,9 @@
 
 ## Drone Delivery Route Optimization System
 
-**Course:** Design & Analysis of Algorithms (DAA)
-**Document version:** 1.2
+**Document version:** 1.3
 **Date:** 22 September 2026
 **Companion document:** [Software Requirements Specification](SRS.md)
-
----
-
-### Document Control
-
-| Field | Value |
-|---|---|
-| Project type | **Individual project** |
-| Group number | **02** |
-| Author | **Maaz Bin Haider** |
-| Institution | `<UNIVERSITY / DEPARTMENT>` |
-| Course instructor | `<PROFESSOR NAME>` |
-| Submission date | `<DEADLINE>` |
 
 ---
 
@@ -58,8 +44,8 @@ architecture, the data model, the mathematical cost model, the algorithms with t
 pseudocode and complexity, the module decomposition, the API contract and the verification
 strategy.
 
-Where the SRS says *what* must happen, this document says *by what mechanism*, and — for a
-Design & Analysis of Algorithms deliverable — *at what cost*.
+Where the SRS says *what* must happen, this document says *by what mechanism* and *at what
+cost*.
 
 ### 1.2 Scope
 
@@ -73,7 +59,7 @@ the form FR-n.m or NFR-n. Section 20 provides the reverse mapping from requireme
 
 ### 1.4 Intended Audience
 
-The author, the course instructor, and any future maintainer. Readers are assumed
+Anyone implementing, reviewing or maintaining the system. Readers are assumed
 familiar with graph algorithms at the level of *Introduction to Algorithms* (Cormen et al.),
 and with basic web application structure.
 
@@ -212,13 +198,13 @@ Steps 2–4 are the expensive part and are cached; steps 5–9 are cheap table l
 
 | Layer | Choice | Rationale |
 |---|---|---|
-| Language | **Python 3.11+** | Readable algorithm code that a grader can follow line by line; rich standard library; `dataclasses` and `typing` give a clean domain model without boilerplate. |
+| Language | **Python 3.11+** | Readable algorithm code that can be followed line by line; rich standard library; `dataclasses` and `typing` give a clean domain model without boilerplate. |
 | Web framework | **Flask** | Minimal surface area. The project needs about eight JSON endpoints and one static page; Flask adds almost no conceptual overhead, keeping attention on the algorithms. FastAPI was considered but its async model and Pydantic layer are unnecessary weight for a single-user local simulation. |
 | Map rendering | **Leaflet.js** | Mature, dependency-free, renders geographic coordinates natively, and supports the polylines, circle markers, polygons and animated markers this design needs. |
 | Charting | **Chart.js** | Small, declarative, sufficient for the benchmark line and bar charts. Rendered client-side so no server-side plotting dependency is required. |
 | Geometry | **Hand-written** (`ddros/geo.py`) | Haversine distance, initial bearing, point-to-segment distance and point-in-polygon are each a few lines and are needed inside the admissibility argument, so they are implemented and tested directly rather than imported. |
 | Testing | **pytest** | Concise assertions, parameterised cases, coverage integration. |
-| Numerics | **Python stdlib only** (`math`, `statistics`) | NumPy is deliberately avoided in the algorithm tier so that every operation a grader inspects is explicit. |
+| Numerics | **Python stdlib only** (`math`, `statistics`) | NumPy is deliberately avoided in the algorithm tier so that every operation is explicit. |
 
 > **Note on `heapq`.** The Python standard library provides a min-heap. Because constraint
 > C-1 requires the priority queue to be implemented from first principles, `ddros/structures/min_heap.py`
@@ -1469,7 +1455,8 @@ inside the 1-second budget of NFR-2, with orders of magnitude to spare.
 
 ## 16. Experimental Plan
 
-Satisfies FR-11 and supplies the "Analysis" half of the coursework.
+Satisfies FR-11: every complexity claim the design makes is measured here rather than
+asserted.
 
 ### Experiment 1 — Dijkstra vs A*: nodes expanded
 
@@ -1601,9 +1588,8 @@ threshold, since its logic is thin by design.
 
 ## 19. Module Breakdown and Build Order
 
-This is an individual project, so the table records the order the system was built in rather
-than who built what. The sequence matters: each stage is testable on its own, and nothing
-depends on a later one. The web tier is deliberately last — the algorithms were complete and
+The table records the order the system was built in. The sequence matters: each stage is
+testable on its own, and nothing depends on a later one. The web tier is deliberately last — the algorithms were complete and
 under test behind a command-line interface before any of the interface existed, which is the
 mitigation for risk R2 in §18.
 

@@ -1,7 +1,6 @@
 """Experimental harness (TDD section 16, FR-11).
 
-This module supplies the "Analysis" half of Design & Analysis of Algorithms:
-every complexity claim the design makes is measured here rather than asserted.
+Every complexity claim the design makes is measured here rather than asserted.
 Each experiment returns a plain dictionary so results can be charted, exported
 or asserted against by tests.
 

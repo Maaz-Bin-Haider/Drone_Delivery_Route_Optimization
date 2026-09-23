@@ -15,9 +15,19 @@
   function card(title, blurb) {
     const el = document.createElement('div');
     el.className = 'chart-card';
-    el.innerHTML = `<h3>${title}</h3><p>${blurb}</p><canvas></canvas>`;
+    // The canvas sits in a box of fixed height. Chart.js keeps its own aspect
+    // ratio by default and will size the canvas from that, which lets a chart
+    // grow wider than the card holding it -- the axes then run out past the
+    // border. Fixing the height here and turning the ratio off below makes the
+    // chart fit the card instead of the other way round.
+    el.innerHTML = `<h3>${title}</h3><p>${blurb}</p>` +
+                   `<div class="canvas-box"><canvas></canvas></div>`;
     document.getElementById('charts').appendChild(el);
     return el.querySelector('canvas');
+  }
+
+  function base(scales) {
+    return { responsive: true, maintainAspectRatio: false, scales: scales };
   }
 
   function axes(xTitle, yTitle, logX) {
@@ -59,7 +69,7 @@
             borderColor: '#0072B2', backgroundColor: '#0072B2', tension: 0.25 }
         ]
       },
-      options: { responsive: true, scales: axes('vertices (V)', 'nodes expanded') }
+      options: base(axes('vertices (V)', 'nodes expanded'))
     }));
 
     const ctx2 = card('How the heuristic weakens as the objective shifts',
@@ -77,9 +87,10 @@
           backgroundColor: ['#0072B2', '#009E73', '#D55E00']
         }]
       },
-      options: { responsive: true, plugins: { legend: { display: false } },
-                 scales: { y: { beginAtZero: true, title: { display: true, text: '%' },
-                                grid: { color: GRID } } } }
+      options: Object.assign(
+        base({ y: { beginAtZero: true, title: { display: true, text: '%' },
+                    grid: { color: GRID } } }),
+        { plugins: { legend: { display: false } } })
     }));
 
     const ratios = rows.map(r => r.weights.distance.expansion_ratio.mean);
@@ -104,7 +115,7 @@
             data: e.points.map(p => ({ x: p.predictor, y: p.astar_ms })) }
         ]
       },
-      options: { responsive: true, scales: axes('(V + E) log2 V', 'ms per route') }
+      options: base(axes('(V + E) log2 V', 'ms per route'))
     }));
     finding('Experiment 2 — the bound holds empirically',
       `R² = ${e.dijkstra_fit.r_squared.toFixed(4)} for Dijkstra and ` +
@@ -125,7 +136,7 @@
             backgroundColor: '#E69F00', order: 1 }
         ]
       },
-      options: { responsive: true, scales: { y: { beginAtZero: true, grid: { color: GRID } } } }
+      options: base({ y: { beginAtZero: true, grid: { color: GRID } } })
     }));
     if (e.superlinear_at && e.superlinear_at.length) {
       finding('Experiment 4 — speedup is superlinear, and that is not parallelism',
@@ -150,9 +161,10 @@
         datasets: [{ label: 'instances', data: keys.map(k => e.histogram[k]),
                      backgroundColor: '#009E73' }]
       },
-      options: { responsive: true, plugins: { legend: { display: false } },
-                 scales: { x: { title: { display: true, text: 'greedy / optimal' } },
-                           y: { beginAtZero: true, grid: { color: GRID } } } }
+      options: Object.assign(
+        base({ x: { title: { display: true, text: 'greedy / optimal' } },
+               y: { beginAtZero: true, grid: { color: GRID } } }),
+        { plugins: { legend: { display: false } } })
     }));
     finding('Experiment 5 — greedy leaves about a quarter on the table',
       `Mean ratio ${e.ratio.mean.toFixed(3)} (SD ${e.ratio.stdev.toFixed(3)}), worst ` +
@@ -173,8 +185,9 @@
           datasets: [{ label: 'distinct routes', data: sweeps.map(s => s.distinct_routes),
                        backgroundColor: '#CC79A7' }]
         },
-        options: { responsive: true, plugins: { legend: { display: false } },
-                   scales: { y: { beginAtZero: true, grid: { color: GRID } } } }
+        options: Object.assign(
+          base({ y: { beginAtZero: true, grid: { color: GRID } } }),
+          { plugins: { legend: { display: false } } })
       }));
     }
     const zones = (e.no_fly_penalties || [])
@@ -182,6 +195,16 @@
                 `${p.cost_penalty_pct.mean.toFixed(1)}% mean penalty, ` +
                 `${p.unreachable_customers.length} cut off`).join('; ');
     finding('Experiment 7 — wind and airspace both change the decision', zones);
+  }
+
+  function settle() {
+    // Chart.js sizes each canvas from its container when the chart is built,
+    // and relies on a ResizeObserver to correct itself once the grid has laid
+    // out. That observer does not fire in a headless render, which leaves every
+    // chart at whatever width it measured first -- they end up drawn across one
+    // another. Resizing explicitly on the next frame makes the result the same
+    // whether a person or a capture is looking at it.
+    requestAnimationFrame(() => charts.forEach(c => c.resize()));
   }
 
   function render(results) {
@@ -199,6 +222,7 @@
         results.experiment_6.finding, true);
     }
     if (results.experiment_7) environment(results.experiment_7);
+    settle();
   }
 
   D.charts = { render, clear };

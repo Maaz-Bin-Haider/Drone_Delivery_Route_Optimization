@@ -177,13 +177,18 @@
     }
   }
 
-  // Deep links: ?plan=<preset id> loads a demonstration batch and ?t=<minutes>
-  // parks the playback clock at a moment, so a particular point in a run can be
-  // shared, bookmarked or captured rather than described.
+  // Deep links, so a particular view can be shared or bookmarked rather than
+  // described: ?plan=<preset id> loads a demonstration batch, ?t=<minutes>
+  // parks the playback clock at a moment, and ?benchmark=<1-7|all> runs that
+  // experiment on load and shows its charts.
   function deepLink() {
     const q = new URLSearchParams(window.location.search);
     const t = q.get('t');
-    return { plan: q.get('plan'), at: t === null ? null : Number(t) };
+    return {
+      plan: q.get('plan'),
+      at: t === null ? null : Number(t),
+      benchmark: q.get('benchmark')
+    };
   }
 
   async function start() {
@@ -246,6 +251,9 @@
     }
     if (link.at !== null && !Number.isNaN(link.at)) {
       D.animation.seek(link.at);
+    }
+    if (link.benchmark) {
+      await benchmark(link.benchmark);
     }
   }
 

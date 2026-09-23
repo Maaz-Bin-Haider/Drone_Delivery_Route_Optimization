@@ -128,15 +128,19 @@ without starting a server. `test_layering.py` enforces this rather than trusting
 The harness measures every complexity claim the design makes rather than asserting it.
 Reproduce with `python run.py benchmark`.
 
-![Nodes expanded: Dijkstra vs A* across graph sizes](docs/images/benchmark-expansion.svg)
+The analysis panel runs the sweep in the browser and charts the results:
+
+![The benchmark charts in the analysis panel](docs/images/benchmark-charts.png)
+
+*`?benchmark=all` runs the full sweep on load, which is how this was captured.*
 
 | # | Question | Result |
 |---|---|---|
 | 1 | Does A* actually search less than Dijkstra? | Yes, increasingly so with scale: **52% → 22%** of Dijkstra's expansions from V=10 to V=1000. |
-| 2 | Does runtime match the derived `O((V+E) log V)`? | **R² = 0.992** (Dijkstra), 0.991 (A*). |
+| 2 | Does runtime match the derived `O((V+E) log V)`? | **R² above 0.99** on an idle machine. Being a timing measurement it moves with load. |
 | 3 | Does energy-aware routing save energy? | Per journey yes; **per batch no** when the fleet is near its battery limit. |
 | 4 | What does each extra drone buy? | Superlinear speedup. Makespan is **not monotone in general**, though the improvement pass removes the anomaly from this scenario. |
-| 5 | How good is the greedy schedule? | **23% above optimal** on average, 66% worst case. |
+| 5 | How good is the schedule? | **4.7% above optimal** on average, and optimal outright in 56.7% of instances. Greedy alone was 23% above; the improvement pass closed most of the gap. |
 | 6 | Is the fast feasibility test safe? | Conservative, never unsafe — but exact search costs only 1.2× more at this scale. |
 | 7 | Do wind and no-fly zones change decisions? | **381 of 561** node pairs are wind-sensitive. |
 

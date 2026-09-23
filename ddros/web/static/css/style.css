@@ -223,7 +223,11 @@ tbody tr:hover { background: #f7fafc; }
 }
 .chart-card h3 { margin: 0 0 4px; font-size: 14px; }
 .chart-card p { margin: 0 0 10px; font-size: 12px; color: var(--muted); }
-.chart-card canvas { max-height: 240px; }
+/* Chart.js sizes its canvas from this box. The box must be relatively
+   positioned with a definite height, and the canvas must NOT be absolutely
+   positioned -- doing so makes the library read a size it is itself setting,
+   and the charts grow until they overlap their neighbours. */
+.chart-card .canvas-box { position: relative; height: 240px; }
 .findings { margin-top: 12px; display: grid; gap: 8px; }
 .finding {
   background: var(--panel); border: 1px solid var(--line);

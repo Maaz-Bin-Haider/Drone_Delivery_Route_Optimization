@@ -3,7 +3,7 @@
 ## Drone Delivery Route Optimization System
 
 **Course:** Design & Analysis of Algorithms (DAA)
-**Document version:** 1.3
+**Document version:** 1.4
 **Date:** 22 September 2026
 **Prepared in accordance with:** IEEE Std 830-1998, *IEEE Recommended Practice for Software Requirements Specifications*
 
@@ -13,19 +13,12 @@
 
 | Field | Value |
 |---|---|
+| Project type | **Individual project** |
 | Group number | **02** |
+| Author | `<YOUR NAME>` |
 | Institution | `<UNIVERSITY / DEPARTMENT>` |
 | Course instructor | `<PROFESSOR NAME>` |
 | Submission date | `<DEADLINE>` |
-
-### Group Members
-
-| # | Name | Seat number |
-|---|---|---|
-| 1 | `<NAME>` | `<SEAT NO.>` |
-| 2 | `<NAME>` | `<SEAT NO.>` |
-| 3 | `<NAME>` | `<SEAT NO.>` |
-| 4 | `<NAME>` | `<SEAT NO.>` |
 
 ### Revision History
 
@@ -35,6 +28,7 @@
 | 1.1 | 22 Sep 2026 | Fictional city of Kestrel Bay (34 locations); fleet raised to five; operator-composed batches and prepared demonstration plans added |
 | 1.2 | 22 Sep 2026 | Roster of eight with automatic fleet sizing; parcel-release animation on delivery; map sizing requirements |
 | 1.3 | 22 Sep 2026 | En-route consolidation: a drone crossing a pending destination delivers it in passing |
+| 1.4 | 23 Sep 2026 | Recorded as an individual project; group roster removed |
 
 ---
 
@@ -56,8 +50,8 @@ requirements of the **Drone Delivery Route Optimization System (DDROS)**, a simu
 platform that plans, prioritizes and assigns unmanned aerial package deliveries across a
 modelled city.
 
-The document is intended for the project's development team, the course instructor acting
-as the evaluating authority, and any future maintainer of the codebase. It is the
+The document is intended for the author, the course instructor acting as the evaluating
+authority, and any future maintainer of the codebase. It is the
 authoritative statement of *what* the system must do. The companion
 [Technical Design Document](TDD.md) specifies *how* those requirements are realised.
 
@@ -215,7 +209,7 @@ The system performs eight principal functions:
 |---|---|---|---|
 | **Evaluator** | Course instructor assessing correctness, algorithmic depth and analysis quality. | Expert in algorithms; not assumed familiar with this codebase. | Once, during assessment. |
 | **Operator** | Person driving the simulation during a live demonstration — loading scenarios, adjusting weights and wind, triggering replanning. | General computing literacy; no programming required. | Frequently during demonstration. |
-| **Developer** | Team member extending or maintaining the system. | Proficient in Python and familiar with graph algorithms. | Continuously during development. |
+| **Developer** | The author, or anyone later extending or maintaining the system. | Proficient in Python and familiar with graph algorithms. | Continuously during development. |
 
 Because the Evaluator is a first-time user, **every decision the system makes shall be
 displayed with the reasoning behind it** — the drone chosen, the route taken, the distance,
@@ -226,7 +220,7 @@ present an unexplained result.
 
 | Ref | Constraint |
 |---|---|
-| C-1 | **Algorithms shall be implemented from first principles.** Dijkstra, A*, the min-heap priority queue and the greedy assignment strategy shall be written by the team. Calling a library shortest-path routine (e.g. `networkx.shortest_path`, `scipy.sparse.csgraph`) to satisfy FR-3 is prohibited, as it would defeat the academic purpose of the project. |
+| C-1 | **Algorithms shall be implemented from first principles.** Dijkstra, A*, the min-heap priority queue and the greedy assignment strategy shall be written for this project. Calling a library shortest-path routine (e.g. `networkx.shortest_path`, `scipy.sparse.csgraph`) to satisfy FR-3 is prohibited, as it would defeat the academic purpose of the project. |
 | C-2 | Edge weights shall be non-negative, which is a precondition of Dijkstra's correctness. |
 | C-3 | The A* heuristic shall be admissible and consistent, and this property shall be justified in the design documentation. |
 | C-4 | The system shall run offline on a single machine. Because the city is fictional and its backdrop is drawn from local data, no base-map or other network service is contacted at run time. |

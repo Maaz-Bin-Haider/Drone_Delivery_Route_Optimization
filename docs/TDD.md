@@ -3,7 +3,7 @@
 ## Drone Delivery Route Optimization System
 
 **Course:** Design & Analysis of Algorithms (DAA)
-**Document version:** 1.1
+**Document version:** 1.2
 **Date:** 22 September 2026
 **Companion document:** [Software Requirements Specification](SRS.md)
 
@@ -13,19 +13,12 @@
 
 | Field | Value |
 |---|---|
+| Project type | **Individual project** |
 | Group number | **02** |
+| Author | `<YOUR NAME>` |
 | Institution | `<UNIVERSITY / DEPARTMENT>` |
 | Course instructor | `<PROFESSOR NAME>` |
 | Submission date | `<DEADLINE>` |
-
-### Group Members
-
-| # | Name | Seat number |
-|---|---|---|
-| 1 | `<NAME>` | `<SEAT NO.>` |
-| 2 | `<NAME>` | `<SEAT NO.>` |
-| 3 | `<NAME>` | `<SEAT NO.>` |
-| 4 | `<NAME>` | `<SEAT NO.>` |
 
 ---
 
@@ -71,8 +64,7 @@ Design & Analysis of Algorithms deliverable — *at what cost*.
 ### 1.2 Scope
 
 This document covers the complete system: algorithm tier, application tier and presentation
-tier. It is the implementation reference for the development team and the design record for
-assessment.
+tier. It is the implementation reference and the design record for assessment.
 
 ### 1.3 Relationship to the SRS
 
@@ -81,7 +73,7 @@ the form FR-n.m or NFR-n. Section 20 provides the reverse mapping from requireme
 
 ### 1.4 Intended Audience
 
-The development team, the course instructor, and any future maintainer. Readers are assumed
+The author, the course instructor, and any future maintainer. Readers are assumed
 familiar with graph algorithms at the level of *Introduction to Algorithms* (Cormen et al.),
 and with basic web application structure.
 
@@ -1607,30 +1599,34 @@ threshold, since its logic is thin by design.
 
 ---
 
-## 19. Work Distribution
+## 19. Module Breakdown and Build Order
 
-The module decomposition below is the intended unit of work allocation. Owner cells are left
-blank for the team to complete.
+This is an individual project, so the table records the order the system was built in rather
+than who built what. The sequence matters: each stage is testable on its own, and nothing
+depends on a later one. The web tier is deliberately last — the algorithms were complete and
+under test behind a command-line interface before any of the interface existed, which is the
+mitigation for risk R2 in §18.
 
-| Module | Files | Requirements | Owner |
-|---|---|---|---|
-| Geometry and domain model | `geo.py`, `domain/` | FR-1.2, FR-1.9 | |
-| Graph and validation | `graph/` | FR-1.1, FR-1.5–FR-1.7 | |
-| Data structures | `structures/min_heap.py` | FR-6.1, FR-6.4, C-1 | |
-| Cost model and wind | `cost/`, `environment/wind.py` | FR-4.1–FR-4.5, FR-9.1–FR-9.4 | |
-| Routing algorithms | `algorithms/dijkstra.py`, `astar.py`, `heuristics.py` | FR-3.1–FR-3.8 | |
-| Constrained routing | `algorithms/constrained.py` | FR-5.1–FR-5.7 | |
-| No-fly zones | `environment/no_fly.py` | FR-8.1–FR-8.6 | |
-| Scheduling and assignment | `scheduling/` | FR-6, FR-7 | |
-| Orchestrator and caching | `simulation/` | §3.3, §11 | |
-| Benchmarking and analysis | `analysis/` | FR-11.1–FR-11.7 | |
-| REST API | `web/api.py`, `web/app.py` | SI-1, §12 | |
-| Frontend — map and animation | `static/js/map.js`, `animation.js` | UI-2–UI-5 | |
-| Frontend — controls and results | `static/js/controls.js`, `results.js`, `charts.js` | UI-6–UI-10, FR-10 | |
-| Test suite | `tests/` | NFR-16, §17 | |
-| Documentation | `docs/` | — | |
+| # | Module | Files | Requirements | Depends on |
+|---|---|---|---|---|
+| 1 | Geometry and domain model | `geo.py`, `domain/` | FR-1.2, FR-1.9 | — |
+| 2 | Graph and validation | `graph/` | FR-1.1, FR-1.5 – FR-1.7 | 1 |
+| 3 | Data structures | `structures/min_heap.py` | FR-6.1, FR-6.4, C-1 | — |
+| 4 | Cost model and wind | `cost/`, `environment/wind.py` | FR-4.1 – FR-4.5, FR-9.1 – FR-9.4 | 2 |
+| 5 | No-fly zones | `environment/no_fly.py` | FR-8.1 – FR-8.6 | 1, 2 |
+| 6 | Routing algorithms | `algorithms/dijkstra.py`, `astar.py`, `heuristics.py` | FR-3.1 – FR-3.8 | 2, 3, 4 |
+| 7 | Constrained routing | `algorithms/constrained.py` | FR-5.1 – FR-5.7 | 6 |
+| 8 | Route table and cache | `simulation/cache.py` | §9.2, §11 | 6 |
+| 9 | Scheduling and tours | `scheduling/priority_queue.py`, `assignment.py` | FR-6, FR-7, FR-7.13 – FR-7.16 | 3, 7, 8 |
+| 10 | Fleet sizing | `scheduling/fleet_sizing.py` | FR-7.9 – FR-7.12 | 9 |
+| 11 | Orchestrator | `simulation/orchestrator.py` | §3.3 | 9, 10 |
+| 12 | Benchmarking | `analysis/` | FR-11.1 – FR-11.7 | 6, 9 |
+| 13 | REST API | `web/api.py`, `web/app.py` | SI-1, §12 | 11, 12 |
+| 14 | Dashboard | `web/static/js/`, `web/templates/` | UI-1 – UI-18, FR-10 | 13 |
+| 15 | Test suite | `tests/` | NFR-16, §17 | written alongside each stage |
 
----
+Stages 1–12 have no dependency on stage 13 or 14, which is the layering rule of §3.2 restated
+as a build order and enforced by `test_layering.py`.
 
 ## 20. Requirements Traceability
 
